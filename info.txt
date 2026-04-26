@@ -1,0 +1,7 @@
+1. Arrumar quebra de texto nos cards com valores (os R$ estão ficando acima e os numeros abaixo)
+2. Fazer melhorias de UX
+
+• Criar aba de gráficos
+• Criar aba poupança, reserva e investimentos // com aquele lance do saldo de aporte
+• Criar aba de cartões benefício
+• Criar tela de login/senha
