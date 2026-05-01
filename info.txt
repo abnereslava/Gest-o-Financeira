@@ -1,6 +1,4 @@
-1. Arrumar quebra de texto nos cards com valores (os R$ estão ficando acima e os numeros abaixo)
-2. Fazer melhorias de UX
-
+• Terminar aba "ano" - mas só após fazer a parte dos cartões de benefício, para garantir que esses dados sejam contemplados ali também
 • Criar aba de gráficos
 • Criar aba poupança, reserva e investimentos // com aquele lance do saldo de aporte
 • Criar aba de cartões benefício

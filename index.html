@@ -1,324 +1,601 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finanças | Painel</title>
+    <title>Valorência Gestão de Finanças</title>
+    <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Estilos da Tela de Login */
+        #tela-login {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f4f7f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            flex-direction: column;
+        }
+
+        .login-box {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .login-box h2 {
+            color: var(--text-main);
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+        }
+
+        .login-box p {
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+        }
+
+        .btn-google {
+            background-color: #4285F4;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            transition: background 0.2s;
+        }
+
+        .btn-google:hover {
+            background-color: #3367D6;
+        }
+
+        /* Ocultar app principal por padrão */
+        #app-content {
+            display: none;
+        }
+    </style>
 </head>
+
 <body>
 
-    <header class="topbar">
-        <div class="mes-seletor">
-            <button id="btn-mes-anterior"><i class="fa-solid fa-chevron-left"></i></button>
-            <div class="mes-atual-container" style="position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="document.getElementById('input-mes-picker').showPicker()">
-                <h2 id="mes-atual-label">Carregando...</h2>
-                <input type="month" id="input-mes-picker" style="opacity: 0; position: absolute; pointer-events: none; width: 1px; height: 1px;">
-            </div>
-            <button id="btn-mes-proximo"><i class="fa-solid fa-chevron-right"></i></button>
+    <!-- Tela de Login -->
+    <div id="tela-login">
+        <div class="login-box">
+            <h2><i class="fa-solid fa-wallet" style="color: var(--accent);"></i> Finanças</h2>
+            <p>Faça login para acessar seu painel seguro.</p>
+            <button id="btn-login-google" class="btn-google">
+                <i class="fa-brands fa-google"></i> Entrar com Google
+            </button>
         </div>
-        <button id="btn-config" class="icon-btn" title="Configurações"><i class="fa-solid fa-gear"></i></button>
-    </header>
+    </div>
 
-    <nav class="main-tabs" id="main-nav-tabs">
-        <button class="main-tab-btn active" data-target="tela-lancamentos">Lançamentos</button>
-        <button class="main-tab-btn" data-target="tela-pesquisa">Pesquisa</button>
-        <button class="main-tab-btn" data-target="tela-graficos">Gráficos</button>
-        <button class="main-tab-btn" data-target="tela-investimentos">Investimentos</button>
-        <button class="main-tab-btn" data-target="tela-beneficios">Benefícios</button>
-    </nav>
-
-    <main class="container">
-        <div id="tela-lancamentos" class="tela active">
-            <section class="dashboard">
-            <div class="card fatura-anterior">
-                <h3 title="Gastos no cartão do mês passado debitados neste mês">Cartão mês anterior</h3>
-                <p id="total-fatura">R$ 0,00</p>
-            </div>
-            <div class="card entrada">
-                <h3>Entradas</h3>
-                <p id="total-entradas">R$ 0,00</p>
-            </div>
-            <div class="card saida">
-                <h3 title="Gastos em Dinheiro, Débito e Pix">Gastos à Vista</h3>
-                <p id="total-saidas">R$ 0,00</p>
-            </div>
-            <div class="card saldo">
-                <h3 title="Apenas Operações Realizadas">Saldo Efetivo</h3>
-                <p id="saldo-atual">R$ 0,00</p>
-            </div>
-            <div class="card previsao">
-                <h3 title="Realizadas + Previstas (+ Simulações se ativado)">Saldo Projetado</h3>
-                <p id="saldo-previsto">R$ 0,00</p>
-            </div>
-            <div class="card fatura-atual">
-                <h3 title="Gastos no cartão neste mês a serem pagos no mês que vem">Cartão mês seguinte</h3>
-                <p id="total-cartao-mes">R$ 0,00</p>
-            </div>
-        </section>
-
-        <section class="acoes">
-            <div class="filtros-container">
-                <select id="filtro-categoria" class="filtro-select">
-                    <option value="">Todas Categorias</option>
-                </select>
-                <select id="filtro-cartao" class="filtro-select">
-                    <option value="">Todos os Cartões</option>
-                </select>
-                <select id="filtro-status" class="filtro-select">
-                    <option value="">Status (Todos)</option>
-                    <option value="realizada">Realizados</option>
-                    <option value="prevista">Previstos</option>
-                    <option value="simulacao">Simulações</option>
-                </select>
-            </div>
-            <div class="toggle-simulacao">
-                <input type="checkbox" id="toggle-ver-simulacoes" checked>
-                <label for="toggle-ver-simulacoes">Incluir Simulações</label>
-            </div>
-        </section>
-
-        <section class="lista-container">
-            <div class="lista-header" id="lista-header">
-                <span data-sort="data" class="sortable active-sort-desc">Data <i class="fa-solid fa-sort-down"></i></span>
-                <span data-sort="descricao" class="sortable">Descrição <i class="fa-solid fa-sort"></i></span>
-                <span data-sort="categoria" class="sortable">Categoria <i class="fa-solid fa-sort"></i></span>
-                <span data-sort="cartao" class="sortable">Cartão <i class="fa-solid fa-sort"></i></span>
-                <span data-sort="valor" class="sortable">Valor (R$) <i class="fa-solid fa-sort"></i></span>
-                <span data-sort="status" class="sortable">Status / Ações <i class="fa-solid fa-sort"></i></span>
-            </div>
-            
-            <form id="form-inline" class="linha-insercao">
-                <input type="date" id="in-data" required title="Data">
-                <input type="text" id="in-desc" placeholder="Nova descrição..." required>
-                <select id="in-categoria" required></select>
-                <select id="in-cartao"></select>
-                <div class="valor-input-group">
-                    <select id="in-tipo" title="Tipo">
-                        <option value="saida">-</option>
-                        <option value="entrada">+</option>
-                    </select>
-                    <input type="number" step="0.01" id="in-valor" placeholder="0,00" required>
-                </div>
-                <div class="acoes-insercao">
-                    <select id="in-status" required title="Status do Lançamento">
-                        <option value="realizada">Realizada</option>
-                        <option value="prevista">Previsto</option>
-                        <option value="simulacao">Simulação</option>
-                    </select>
-                    <button type="submit" class="btn-salvar-inline" title="Salvar Lançamento"><i class="fa-solid fa-check"></i></button>
-                </div>
-            </form>
-
-            <ul id="lista-transacoes" class="lista"></ul>
-        </section>
-        </div>
-
-        <div id="tela-pesquisa" class="tela">
-            <h2 style="margin-bottom: 1rem; color: var(--text-main);">Pesquisa Avançada</h2>
-            <div id="pesquisa-container"></div>
-        </div>
-
-        <div id="tela-graficos" class="tela">
-            <h2 style="margin-bottom: 1rem; color: var(--text-main);">Visão Gráfica</h2>
-            <div id="graficos-container"></div>
-        </div>
-
-        <div id="tela-investimentos" class="tela">
-            <h2 style="margin-bottom: 1rem; color: var(--text-main);">Poupança, Reserva e Investimentos</h2>
-            <div id="investimentos-container"></div>
-        </div>
-
-        <div id="tela-beneficios" class="tela">
-            <h2 style="margin-bottom: 1rem; color: var(--text-main);">Cartões Benefício</h2>
-            <div id="beneficios-container"></div>
-        </div>
-    </main>
-
-    <div id="modal-configuracoes" class="modal">
-        <div class="modal-content config-modal">
-            <span class="close-btn">&times;</span>
-            <h2>Configurações do Sistema</h2>
-            <div class="config-tabs">
-                <button class="tab-btn active" data-target="tab-entradas-fixas">Entradas Fixas</button>
-                <button class="tab-btn" data-target="tab-saidas-fixas">Saídas Fixas</button>
-                <button class="tab-btn" data-target="tab-categorias">Categorias</button>
-                <button class="tab-btn" data-target="tab-cartoes">Cartões</button>
-            </div>
-            
-            <div id="tab-entradas-fixas" class="tab-content active">
-                <form id="form-entradas-fixas" class="form-grid">
-                    <input type="text" id="nova-entrada-fixa-desc" placeholder="Descrição (Ex: Salário)" required>
-                    <input type="number" step="0.01" id="nova-entrada-fixa-valor" placeholder="Valor Estimado (R$)" required>
-                    <input type="number" id="nova-entrada-fixa-dia" placeholder="Dia Recebimento (1-31)" min="1" max="31" required>
-                    <div class="input-duplo" style="grid-column: span 2; margin-bottom: 5px;">
-                        <select id="nova-entrada-fixa-cat" class="filtro-select" style="flex: 1;" required><option value="">Categoria...</option></select>
-                        <select id="nova-entrada-fixa-cartao" class="filtro-select" style="flex: 1;"><option value="">Cartão (Opcional)</option></select>
+    <!-- Conteúdo Principal do App -->
+    <div id="app-content">
+        <header class="topbar">
+            <div class="topbar-left">
+                <div class="mes-seletor">
+                    <button id="btn-mes-anterior"><i class="fa-solid fa-chevron-left"></i></button>
+                    <div class="mes-atual-container"
+                        style="position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;"
+                        onclick="document.getElementById('input-mes-picker').showPicker()">
+                        <h2 id="mes-atual-label">Carregando...</h2>
+                        <input type="month" id="input-mes-picker"
+                            style="opacity: 0; position: absolute; pointer-events: none; width: 1px; height: 1px;">
                     </div>
-                    <div class="input-duplo-wrapper" style="grid-column: span 2;">
-                        <div style="display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 0.85rem; color: var(--text-muted);">
-                            <strong>Período (Opcional)</strong>
-                            <div class="tooltip-icone">
-                                <i class="fa-solid fa-circle-question"></i>
-                                <span class="tooltip-texto">Preencha apenas se possuir um prazo definido (ex: parcelas). Se deixar vazio, iniciará no mês atual de forma contínua.</span>
+                    <button id="btn-mes-proximo"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+            </div>
+
+            <div class="topbar-center">
+                <img src="logo.png" alt="Valorência" class="main-logo">
+            </div>
+
+            <div class="topbar-right">
+                <button id="btn-theme-toggle" class="icon-btn" title="Alternar Tema"><i class="fa-solid fa-moon"></i></button>
+                <button id="btn-config" class="icon-btn" title="Configurações"><i class="fa-solid fa-gear"></i></button>
+                <div style="width: 1px; height: 18px; background: var(--border); margin: 0 5px;"></div>
+                <button id="btn-logout" class="icon-btn" title="Sair da Conta"><i
+                        class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+        </header>
+
+        <nav class="main-tabs" id="main-nav-tabs">
+            <button class="main-tab-btn active" data-target="tela-lancamentos">Lançamentos</button>
+            <button class="main-tab-btn" data-target="tela-ano">Visão Anual</button>
+            <button class="main-tab-btn" data-target="tela-graficos">Gráficos</button>
+            <button class="main-tab-btn" data-target="tela-investimentos">Investimentos</button>
+            <button class="main-tab-btn" data-target="tela-beneficios">Benefícios</button>
+        </nav>
+
+        <main class="container">
+            <div id="tela-lancamentos" class="tela active">
+                <section class="dashboard">
+                    <div class="card fatura-anterior">
+                        <h3 title="Gastos no cartão do mês passado debitados neste mês">Cartão mês anterior</h3>
+                        <p id="total-fatura">R$ 0,00</p>
+                    </div>
+                    <div class="card entrada">
+                        <h3>Entradas</h3>
+                        <p id="total-entradas">R$ 0,00</p>
+                    </div>
+                    <div class="card saida">
+                        <h3 title="Gastos em Dinheiro, Débito e Pix">Gastos à Vista</h3>
+                        <p id="total-saidas">R$ 0,00</p>
+                    </div>
+                    <div class="card fatura-atual">
+                        <h3 title="Gastos no cartão neste mês a serem pagos no mês que vem">Cartão mês seguinte</h3>
+                        <p id="total-cartao-mes">R$ 0,00</p>
+                    </div>
+                    <div class="card previsao">
+                        <h3 title="Realizadas + Previstas (+ Simulações se ativado)">Saldo Projetado</h3>
+                        <p id="saldo-previsto">R$ 0,00</p>
+                    </div>
+                    <div class="card saldo-efetivo-destaque">
+                        <h3 title="Apenas Operações Realizadas">Saldo Efetivo</h3>
+                        <p id="saldo-atual">R$ 0,00</p>
+                    </div>
+                </section>
+
+                <section class="acoes">
+                    <div class="filtros-container">
+                        <div class="busca-wrapper">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="filtro-busca" placeholder="Pesquisar...">
+                        </div>
+                        <select id="filtro-tipo" class="filtro-select">
+                            <option value="">Tipo</option>
+                            <option value="entrada">Entradas</option>
+                            <option value="saida">Saídas</option>
+                        </select>
+                        <select id="filtro-categoria" class="filtro-select">
+                            <option value="">Categoria</option>
+                        </select>
+                        <select id="filtro-cartao" class="filtro-select">
+                            <option value="">Cartão</option>
+                        </select>
+                        <select id="filtro-status" class="filtro-select">
+                            <option value="">Status</option>
+                            <option value="realizada">Realizados</option>
+                            <option value="prevista">Previstos</option>
+                            <option value="simulacao">Simulações</option>
+                        </select>
+                        
+                        <button id="btn-limpar-filtros" title="Limpar Filtros" class="btn-icon-filtro">
+                            <i class="fa-solid fa-filter-circle-xmark"></i>
+                        </button>
+
+                        <div class="toggle-simulacao">
+                            <label class="switch">
+                                <input type="checkbox" id="toggle-ver-simulacoes">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Simulações</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="lista-container">
+                    <div class="lista-header" id="lista-header">
+                        <span style="justify-content: center;">#</span>
+                        <span data-sort="data" class="sortable active-sort-desc">Data <i
+                                class="fa-solid fa-sort-down"></i></span>
+                        <span data-sort="descricao" class="sortable">Descrição <i class="fa-solid fa-sort"></i></span>
+                        <span data-sort="categoria" class="sortable">Categoria <i class="fa-solid fa-sort"></i></span>
+                        <span data-sort="cartao" class="sortable">Cartão <i class="fa-solid fa-sort"></i></span>
+                        <span data-sort="valor" class="sortable">Valor (R$) <i class="fa-solid fa-sort"></i></span>
+                        <span data-sort="status" class="sortable">Status <i class="fa-solid fa-sort"></i></span>
+                        <span style="justify-content: center;"><i></i></span>
+                    </div>
+
+                    <form id="form-inline" class="linha-insercao">
+                        <div style="display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.8rem; font-weight: bold;">+</div>
+                        <input type="date" id="in-data" required title="Data">
+                        <input type="text" id="in-desc" placeholder="Nova descrição..." required>
+                        <select id="in-categoria" required></select>
+                        <select id="in-cartao"></select>
+                        <div class="valor-input-group">
+                            <select id="in-tipo" title="Tipo">
+                                <option value="saida">-</option>
+                                <option value="entrada">+</option>
+                            </select>
+                            <input type="number" step="0.01" id="in-valor" placeholder="0,00" required>
+                        </div>
+                        <select id="in-status" required title="Status do Lançamento">
+                            <option value="realizada">Realizada</option>
+                            <option value="prevista">Previsto</option>
+                            <option value="simulacao">Simulação</option>
+                        </select>
+                        <div class="acoes-insercao">
+                            <button type="submit" class="btn-salvar-inline" title="Salvar Lançamento"><i
+                                    class="fa-solid fa-check"></i></button>
+                        </div>
+                    </form>
+
+                    <ul id="lista-transacoes" class="lista"></ul>
+                </section>
+            </div>
+
+            <!-- Aba Visão Anual -->
+            <div id="tela-ano" class="tela">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2 style="color: var(--text-main);"><i class="fa-solid fa-chart-line" style="color: var(--accent);"></i> Inteligência Anual</h2>
+                    <div class="mes-seletor" style="min-width: 120px;">
+                        <button id="btn-ano-anterior"><i class="fa-solid fa-chevron-left"></i></button>
+                        <h2 id="ano-atual-label" style="font-size: 1rem; margin: 0 10px;">2024</h2>
+                        <button id="btn-ano-proximo"><i class="fa-solid fa-chevron-right"></i></button>
+                    </div>
+                </div>
+
+                <!-- 1. Cards de Resumo -->
+                <section class="dashboard">
+                    <div class="card entrada">
+                        <h3 title="Soma de todas as receitas do ano">Arrecadação Total</h3>
+                        <p id="ano-total-entradas">R$ 0,00</p>
+                    </div>
+                    <div class="card saida">
+                        <h3 title="Soma de todos os gastos">Custo de Vida Real</h3>
+                        <p id="ano-total-saidas">R$ 0,00</p>
+                    </div>
+                    <div class="card saldo-efetivo-destaque">
+                        <h3 title="O que efetivamente sobrou (Lucro)">Saldo Retido</h3>
+                        <p id="ano-saldo-retido">R$ 0,00</p>
+                    </div>
+                    <div class="card previsao">
+                        <h3 title="Custo de vida dividido pelos meses corridos">Média Mensal de Gasto</h3>
+                        <p id="ano-media-gasto">R$ 0,00</p>
+                    </div>
+                </section>
+
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 2.5rem;" class="ano-grid-layout">
+                    
+                    <!-- 2. Gráfico de Fluxo de Caixa -->
+                    <div class="card" style="display: flex; flex-direction: column;">
+                        <h3 style="margin-bottom: 1.5rem; font-size: 0.85rem; color: var(--text-main);">Fluxo de Caixa Mensal</h3>
+                        <div id="grafico-fluxo-caixa" class="grafico-barras">
+                            <!-- Barras injetadas via JS -->
+                        </div>
+                        <div style="display: flex; justify-content: center; gap: 15px; margin-top: 15px; font-size: 0.8rem;">
+                            <span style="color: var(--text-muted);"><i class="fa-solid fa-square" style="color: var(--success);"></i> Entradas</span>
+                            <span style="color: var(--text-muted);"><i class="fa-solid fa-square" style="color: var(--danger);"></i> Saídas</span>
+                        </div>
+                    </div>
+
+                    <!-- 3. Raio-X das Categorias -->
+                    <div class="card" style="display: flex; flex-direction: column; max-height: 400px;">
+                        <h3 style="margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-main);">Maiores Ralos (Categorias)</h3>
+                        <div id="ano-lista-categorias" style="overflow-y: auto; padding-right: 5px; flex: 1;" class="config-main">
+                            <!-- Categorias injetadas via JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem;" class="ano-grid-layout">
+                    
+                    <!-- 5. O Peso do Cartão -->
+                    <div class="card">
+                        <h3 style="margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-main);">Peso do Cartão de Crédito</h3>
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                            <span style="font-size: 0.85rem; color: var(--text-muted);">À Vista (Pix/Débito)</span>
+                            <strong id="ano-pct-vista" style="color: var(--text-main);">0%</strong>
+                        </div>
+                        <div class="barra-progresso-fundo">
+                            <div id="ano-barra-vista" class="barra-progresso-preenchimento" style="width: 0%; background: var(--text-muted);"></div>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 15px; margin-bottom: 10px;">
+                            <span style="font-size: 0.85rem; color: var(--text-muted);">Cartão de Crédito</span>
+                            <strong id="ano-pct-cartao" style="color: var(--danger);">0%</strong>
+                        </div>
+                        <div class="barra-progresso-fundo">
+                            <div id="ano-barra-cartao" class="barra-progresso-preenchimento" style="width: 0%; background: var(--danger);"></div>
+                        </div>
+                    </div>
+
+                    <!-- 6. Projeção de Fim de Ano -->
+                    <div class="card" style="background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), var(--surface)); border-top: 2px solid #3b82f6;">
+                        <h3 style="margin-bottom: 0.5rem; font-size: 0.85rem; color: #60a5fa;"><i class="fa-solid fa-crystal-ball"></i> Projeção 31 de Dezembro</h3>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.4;">Cálculo baseado no saldo atual somado às receitas e despesas fixas até o fim do ano.</p>
+                        <p id="ano-projecao-final" style="font-size: 2rem; font-weight: 700; color: var(--text-main); margin-top: auto;">R$ 0,00</p>
+                    </div>
+
+                    <!-- 4. Termômetro de Metas (Placeholder Gamificado) -->
+                    <div class="card" style="border-top: 2px solid var(--primary);">
+                        <h3 style="margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-main);">Eficiência do Orçamento</h3>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">O quanto das suas entradas foi retido como lucro neste ano.</p>
+                        <div style="display: flex; align-items: baseline; gap: 5px;">
+                            <p id="ano-eficiencia-pct" style="font-size: 2.5rem; font-weight: 700; color: var(--success); line-height: 1;">0%</p>
+                            <span style="color: var(--text-muted); font-size: 0.85rem;">retido</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tela-graficos" class="tela">
+                <h2 style="margin-bottom: 1rem; color: var(--text-main);">Visão Gráfica</h2>
+                <div id="graficos-container"></div>
+            </div>
+
+            <div id="tela-investimentos" class="tela">
+                <h2 style="margin-bottom: 1rem; color: var(--text-main);">Poupança, Reserva e Investimentos</h2>
+                <div id="investimentos-container"></div>
+            </div>
+
+            <div id="tela-beneficios" class="tela">
+                <h2 style="margin-bottom: 1rem; color: var(--text-main);">Cartões Benefício</h2>
+                <div id="beneficios-container"></div>
+            </div>
+        </main>
+
+        <div id="modal-configuracoes" class="modal">
+            <div class="modal-content config-modal">
+                <header class="modal-header">
+                    <h2><i class="fa-solid fa-sliders"></i> Configurações do Sistema</h2>
+                    <span class="close-btn">&times;</span>
+                </header>
+
+                <div class="config-body">
+                    <aside class="config-sidebar">
+                        <div class="config-tabs">
+                            <button class="tab-btn active" data-target="tab-entradas-fixas"><i
+                                    class="fa-solid fa-arrow-trend-up"></i> Entradas Fixas</button>
+                            <button class="tab-btn" data-target="tab-saidas-fixas"><i
+                                    class="fa-solid fa-arrow-trend-down"></i> Saídas Fixas</button>
+                            <button class="tab-btn" data-target="tab-categorias"><i class="fa-solid fa-tags"></i>
+                                Categorias</button>
+                            <button class="tab-btn" data-target="tab-cartoes"><i class="fa-solid fa-credit-card"></i>
+                                Cartões</button>
+                        </div>
+                    </aside>
+
+                    <main class="config-main">
+                        <div id="tab-entradas-fixas" class="tab-content active">
+                            <form id="form-entradas-fixas" class="form-grid">
+                                <input type="text" id="nova-entrada-fixa-desc" placeholder="Descrição (Ex: Salário)"
+                                    required>
+                                <input type="number" step="0.01" id="nova-entrada-fixa-valor"
+                                    placeholder="Valor Estimado (R$)" required>
+                                <input type="number" id="nova-entrada-fixa-dia" placeholder="Dia Recebimento (1-31)"
+                                    min="1" max="31" required>
+                                <div class="input-duplo" style="grid-column: span 2; margin-bottom: 5px;">
+                                    <select id="nova-entrada-fixa-cat" class="filtro-select" style="flex: 1;" required>
+                                        <option value="">Categoria...</option>
+                                    </select>
+                                    <select id="nova-entrada-fixa-cartao" class="filtro-select" style="flex: 1;">
+                                        <option value="">Débito/pix/dinheiro</option>
+                                    </select>
+                                </div>
+                                <div class="input-duplo-wrapper" style="grid-column: span 2;">
+                                    <div
+                                        style="display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 0.85rem; color: var(--text-muted);">
+                                        <strong>Período (Opcional)</strong>
+                                        <div class="tooltip-icone">
+                                            <i class="fa-solid fa-circle-question"></i>
+                                            <span class="tooltip-texto">Preencha apenas se possuir um prazo definido
+                                                (ex: parcelas). Se deixar vazio, iniciará no mês atual de forma
+                                                contínua.</span>
+                                        </div>
+                                    </div>
+                                    <div class="input-duplo" style="grid-column: span 1;">
+                                        <input type="month" id="nova-entrada-fixa-inicio" title="Mês de Início">
+                                        <span style="color: var(--text-muted); font-size: 0.8rem;">até</span>
+                                        <input type="month" id="nova-entrada-fixa-fim"
+                                            title="Término (Deixe vazio para Infinito)">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn-secondary w-100">
+                                    <i class="fa-solid fa-plus"></i> Adicionar Entrada Fixa
+                                </button>
+                            </form>
+                            <ul id="lista-entradas-fixas" class="lista-simples"></ul>
+                        </div>
+
+                        <div id="tab-saidas-fixas" class="tab-content">
+                            <form id="form-saidas-fixas" class="form-grid">
+                                <input type="text" id="nova-saida-fixa-desc" placeholder="Descrição (Ex: Condomínio)"
+                                    required>
+                                <input type="number" step="0.01" id="nova-saida-fixa-valor"
+                                    placeholder="Valor Estimado (R$)" required>
+                                <input type="number" id="nova-saida-fixa-dia" placeholder="Dia Cobrança (1-31)" min="1"
+                                    max="31" required>
+                                <div class="input-duplo" style="grid-column: span 2; margin-bottom: 5px;">
+                                    <select id="nova-saida-fixa-cat" class="filtro-select" style="flex: 1;" required>
+                                        <option value="">Categoria...</option>
+                                    </select>
+                                    <select id="nova-saida-fixa-cartao" class="filtro-select" style="flex: 1;">
+                                        <option value="">Débito/pix/dinheiro</option>
+                                    </select>
+                                </div>
+                                <div class="input-duplo-wrapper" style="grid-column: span 2;">
+                                    <div
+                                        style="display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 0.85rem; color: var(--text-muted);">
+                                        <strong>Período (Opcional)</strong>
+                                        <div class="tooltip-icone">
+                                            <i class="fa-solid fa-circle-question"></i>
+                                            <span class="tooltip-texto">Preencha apenas se possuir um prazo definido
+                                                (ex: parcelas). Se deixar vazio, iniciará no mês atual de forma
+                                                contínua.</span>
+                                        </div>
+                                    </div>
+                                    <div class="input-duplo" style="grid-column: span 1;">
+                                        <input type="month" id="nova-saida-fixa-inicio" title="Mês de Início">
+                                        <span style="color: var(--text-muted); font-size: 0.8rem;">até</span>
+                                        <input type="month" id="nova-saida-fixa-fim"
+                                            title="Término (Deixe vazio para Infinito)">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn-secondary w-100"><i class="fa-solid fa-plus"></i>
+                                    Adicionar Saída Fixa</button>
+                            </form>
+                            <ul id="lista-saidas-fixas" class="lista-simples"></ul>
+                        </div>
+
+                        <div id="tab-categorias" class="tab-content">
+                            <form id="form-categoria" class="form-inline"
+                                style="background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 12px; margin-bottom: 1.5rem; border: 1px solid var(--border);">
+                                <input type="text" id="nova-cat-nome" placeholder="Nome da Categoria" required>
+                                <select id="nova-cat-tipo" required
+                                    style="padding: 0.8rem; border: 1px solid var(--border); border-radius: 6px;">
+                                    <option value="ambas">Ambas</option>
+                                    <option value="saida">Saída</option>
+                                    <option value="entrada">Entrada</option>
+                                </select>
+                                <input type="color" id="nova-cat-cor" value="#4a90e2" title="Cor">
+                                <button type="submit" class="btn-secondary" style="height: 45px;"><i
+                                        class="fa-solid fa-plus"></i></button>
+                            </form>
+                            <div class="config-list-scroll">
+                                <details class="colapsavel-lista" open>
+                                    <summary>Entradas</summary>
+                                    <ul id="lista-categorias-entrada" class="lista-simples"></ul>
+                                </details>
+                                <details class="colapsavel-lista" open>
+                                    <summary>Saídas</summary>
+                                    <ul id="lista-categorias-saida" class="lista-simples"></ul>
+                                </details>
+                                <details class="colapsavel-lista">
+                                    <summary>Gerais (Ambas)</summary>
+                                    <ul id="lista-categorias-ambas" class="lista-simples"></ul>
+                                </details>
                             </div>
                         </div>
-                        <div class="input-duplo" style="grid-column: span 1;">
-                            <input type="month" id="nova-entrada-fixa-inicio" title="Mês de Início">
-                            <span style="color: var(--text-muted); font-size: 0.8rem;">até</span>
-                            <input type="month" id="nova-entrada-fixa-fim" title="Término (Deixe vazio para Infinito)">
+
+                        <div id="tab-cartoes" class="tab-content">
+                            <form id="form-cartao" class="form-inline"
+                                style="background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 12px; margin-bottom: 1.5rem; border: 1px solid var(--border);">
+                                <input type="text" id="novo-cartao-nome" placeholder="Nome do Cartão (Ex: Nubank)"
+                                    required style="flex: 2;">
+                                <select id="novo-cartao-tipo" required
+                                    style="padding: 0.8rem; border: 1px solid var(--border); border-radius: 6px; flex: 1;">
+                                    <option value="credito">Crédito</option>
+                                    <option value="debito">Débito</option>
+                                </select>
+                                <button type="submit" class="btn-secondary" style="height: 45px;"><i
+                                        class="fa-solid fa-plus"></i></button>
+                            </form>
+                            <ul id="lista-cartoes" class="lista-simples"></ul>
                         </div>
-                    </div>
-                    <button type="submit" class="btn-secondary w-100" style="background-color: var(--success);"><i class="fa-solid fa-plus"></i> Adicionar Entrada Fixa</button>
-                </form>
-                <ul id="lista-entradas-fixas" class="lista-simples"></ul>
+                    </main>
+                </div>
             </div>
+        </div>
 
-            <div id="tab-saidas-fixas" class="tab-content">
-                <form id="form-saidas-fixas" class="form-grid">
-                    <input type="text" id="nova-saida-fixa-desc" placeholder="Descrição (Ex: Condomínio)" required>
-                    <input type="number" step="0.01" id="nova-saida-fixa-valor" placeholder="Valor Estimado (R$)" required>
-                    <input type="number" id="nova-saida-fixa-dia" placeholder="Dia Cobrança (1-31)" min="1" max="31" required>
-                    <div class="input-duplo" style="grid-column: span 2; margin-bottom: 5px;">
-                        <select id="nova-saida-fixa-cat" class="filtro-select" style="flex: 1;" required><option value="">Categoria...</option></select>
-                        <select id="nova-saida-fixa-cartao" class="filtro-select" style="flex: 1;"><option value="">Cartão (Opcional)</option></select>
-                    </div>
-                    <div class="input-duplo-wrapper" style="grid-column: span 2;">
-                        <div style="display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 0.85rem; color: var(--text-muted);">
-                            <strong>Período (Opcional)</strong>
-                            <div class="tooltip-icone">
-                                <i class="fa-solid fa-circle-question"></i>
-                                <span class="tooltip-texto">Preencha apenas se possuir um prazo definido (ex: parcelas). Se deixar vazio, iniciará no mês atual de forma contínua.</span>
-                            </div>
+        <!-- Modal Confirmação Genérica -->
+        <div id="modal-confirmacao" class="modal">
+            <div class="modal-content" style="max-width: 400px; text-align: center;">
+                <i class="fa-solid fa-triangle-exclamation"
+                    style="font-size: 3rem; color: var(--warning); margin-bottom: 1rem;"></i>
+                <h3 id="modal-confirmacao-titulo">Confirmação</h3>
+                <p id="modal-confirmacao-texto"
+                    style="color: var(--text-muted); margin-bottom: 1.5rem; margin-top: 1rem;"></p>
+                <div style="display: flex; gap: 10px;">
+                    <button id="btn-confirmacao-sim" class="btn-primary w-100"
+                        style="background-color: var(--danger);">Sim, excluir</button>
+                    <button id="btn-confirmacao-nao" class="btn-secondary w-100">Cancelar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Impacto Fixo -->
+        <div id="modal-impacto-fixo" class="modal">
+            <div class="modal-content" style="max-width: 450px;">
+                <i class="fa-solid fa-code-merge"
+                    style="font-size: 3rem; color: var(--warning); margin-bottom: 1rem; text-align: center; width: 100%;"></i>
+                <h3 style="text-align: center; margin-bottom: 1rem;">Abrangência da Ação</h3>
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.95rem; text-align: center;">
+                    Como essa regra impacta múltiplos meses, escolha como aplicar esta alteração:
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 1.5rem;">
+                    <label
+                        style="display: flex; align-items: flex-start; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">
+                        <input type="radio" name="impacto-fixo" value="frente" checked style="margin-top: 4px;">
+                        <div>
+                            <strong>Apenas deste mês em diante</strong>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px;">O histórico não
+                                será alterado. Esta regra só valerá para os próximos meses.</p>
                         </div>
-                        <div class="input-duplo" style="grid-column: span 1;">
-                            <input type="month" id="nova-saida-fixa-inicio" title="Mês de Início">
-                            <span style="color: var(--text-muted); font-size: 0.8rem;">até</span>
-                            <input type="month" id="nova-saida-fixa-fim" title="Término (Deixe vazio para Infinito)">
+                    </label>
+                    <label
+                        style="display: flex; align-items: flex-start; gap: 10px; padding: 10px; border: 1px solid var(--danger); border-radius: 6px; cursor: pointer; background-color: #fef2f2;">
+                        <input type="radio" name="impacto-fixo" value="todos" style="margin-top: 4px;">
+                        <div>
+                            <strong style="color: var(--danger);">Todas as ocorrências (Passado e Futuro)</strong>
+                            <p style="font-size: 0.8rem; color: #991b1b; margin-top: 3px;">⚠️ Atenção: Isso alterará
+                                meses anteriores já fechados e afetará seu saldo passado e todo o histórico.</p>
                         </div>
-                    </div>
-                    <button type="submit" class="btn-secondary w-100"><i class="fa-solid fa-plus"></i> Adicionar Saída Fixa</button>
-                </form>
-                <ul id="lista-saidas-fixas" class="lista-simples"></ul>
-            </div>
-
-            <div id="tab-categorias" class="tab-content">
-                <form id="form-categoria" class="form-inline">
-                    <input type="text" id="nova-cat-nome" placeholder="Nome da Categoria" required>
-                    <select id="nova-cat-tipo" required style="padding: 0.8rem; border: 1px solid var(--border); border-radius: 6px;">
-                        <option value="ambas">Ambas</option>
-                        <option value="saida">Saída</option>
-                        <option value="entrada">Entrada</option>
-                    </select>
-                    <input type="color" id="nova-cat-cor" value="#4a90e2" title="Cor">
-                    <button type="submit" class="btn-secondary"><i class="fa-solid fa-plus"></i></button>
-                </form>
-                <details class="colapsavel-lista" open>
-                    <summary>Entradas</summary>
-                    <ul id="lista-categorias-entrada" class="lista-simples"></ul>
-                </details>
-                <details class="colapsavel-lista" open>
-                    <summary>Saídas</summary>
-                    <ul id="lista-categorias-saida" class="lista-simples"></ul>
-                </details>
-                <details class="colapsavel-lista">
-                    <summary>Gerais (Ambas)</summary>
-                    <ul id="lista-categorias-ambas" class="lista-simples"></ul>
-                </details>
-            </div>
-
-            <div id="tab-cartoes" class="tab-content">
-                <form id="form-cartao" class="form-inline">
-                    <input type="text" id="novo-cartao-nome" placeholder="Nome do Cartão (Ex: Nubank)" required>
-                    <select id="novo-cartao-tipo" required style="padding: 0.8rem; border: 1px solid var(--border); border-radius: 6px;">
-                        <option value="credito">Crédito</option>
-                        <option value="debito">Débito</option>
-                    </select>
-                    <button type="submit" class="btn-secondary"><i class="fa-solid fa-plus"></i></button>
-                </form>
-                <ul id="lista-cartoes" class="lista-simples"></ul>
-            </div>
-
-        </div>
-    </div>
-
-    <!-- Modal Confirmação Genérica -->
-    <div id="modal-confirmacao" class="modal">
-        <div class="modal-content" style="max-width: 400px; text-align: center;">
-            <i class="fa-solid fa-triangle-exclamation" style="font-size: 3rem; color: var(--warning); margin-bottom: 1rem;"></i>
-            <h3 id="modal-confirmacao-titulo">Confirmação</h3>
-            <p id="modal-confirmacao-texto" style="color: var(--text-muted); margin-bottom: 1.5rem; margin-top: 1rem;"></p>
-            <div style="display: flex; gap: 10px;">
-                <button id="btn-confirmacao-sim" class="btn-primary w-100" style="background-color: var(--danger);">Sim, excluir</button>
-                <button id="btn-confirmacao-nao" class="btn-secondary w-100">Cancelar</button>
+                    </label>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button id="btn-confirmar-impacto" class="btn-primary w-100"
+                        style="background-color: var(--danger);" disabled>Confirmar (5s)</button>
+                    <button id="btn-cancelar-impacto" class="btn-secondary w-100">Cancelar</button>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Modal de Impacto Fixo -->
-    <div id="modal-impacto-fixo" class="modal">
-        <div class="modal-content" style="max-width: 450px;">
-            <i class="fa-solid fa-code-merge" style="font-size: 3rem; color: var(--warning); margin-bottom: 1rem; text-align: center; width: 100%;"></i>
-            <h3 style="text-align: center; margin-bottom: 1rem;">Abrangência da Ação</h3>
-            <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.95rem; text-align: center;">
-                Como essa regra impacta múltiplos meses, escolha como aplicar esta alteração:
-            </p>
-            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 1.5rem;">
-                <label style="display: flex; align-items: flex-start; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">
-                    <input type="radio" name="impacto-fixo" value="frente" checked style="margin-top: 4px;">
-                    <div>
-                        <strong>Apenas deste mês em diante</strong>
-                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px;">O histórico não será alterado. Esta regra só valerá para os próximos meses.</p>
-                    </div>
-                </label>
-                <label style="display: flex; align-items: flex-start; gap: 10px; padding: 10px; border: 1px solid var(--danger); border-radius: 6px; cursor: pointer; background-color: #fef2f2;">
-                    <input type="radio" name="impacto-fixo" value="todos" style="margin-top: 4px;">
-                    <div>
-                        <strong style="color: var(--danger);">Todas as ocorrências (Passado e Futuro)</strong>
-                        <p style="font-size: 0.8rem; color: #991b1b; margin-top: 3px;">⚠️ Atenção: Isso alterará meses anteriores já fechados e afetará seu saldo passado e todo o histórico.</p>
-                    </div>
-                </label>
-            </div>
-            <div style="display: flex; gap: 10px;">
-                <button id="btn-confirmar-impacto" class="btn-primary w-100" style="background-color: var(--danger);" disabled>Confirmar (5s)</button>
-                <button id="btn-cancelar-impacto" class="btn-secondary w-100">Cancelar</button>
+        <!-- Modal Aviso Edição Fixo -->
+        <div id="modal-aviso-edicao-fixo" class="modal">
+            <div class="modal-content" style="max-width: 450px; text-align: center;">
+                <span class="close-btn" id="fechar-modal-aviso">&times;</span>
+                <i class="fa-solid fa-circle-info"
+                    style="font-size: 3rem; color: var(--accent); margin-bottom: 1rem; margin-top: 1rem;"></i>
+                <h3 id="aviso-edicao-titulo">Aviso de Edição</h3>
+                <p id="aviso-edicao-texto"
+                    style="color: var(--text-muted); margin-bottom: 1.5rem; margin-top: 1rem; font-size: 0.95rem;">
+                    Você está alterando uma receita/despesa fixa na planilha. Esta modificação será aplicada
+                    <strong>apenas neste mês específico</strong>.
+                    <br><br>
+                    Para alterar para todos os meses futuros de forma definitiva, cancele esta ação e faça a alteração
+                    através das Configurações (⚙️).
+                </p>
+                <button id="btn-confirmar-edicao-fixo" class="btn-primary w-100" style="margin-bottom: 0.5rem;">Entendi,
+                    confirmar para este mês</button>
+                <button id="btn-cancelar-edicao-fixo" class="btn-secondary w-100">Cancelar</button>
             </div>
         </div>
-    </div>
-
-    <!-- Modal Aviso Edição Fixo -->
-    <div id="modal-aviso-edicao-fixo" class="modal">
-        <div class="modal-content" style="max-width: 450px; text-align: center;">
-            <span class="close-btn" id="fechar-modal-aviso">&times;</span>
-            <i class="fa-solid fa-circle-info" style="font-size: 3rem; color: var(--accent); margin-bottom: 1rem; margin-top: 1rem;"></i>
-            <h3 id="aviso-edicao-titulo">Aviso de Edição</h3>
-            <p id="aviso-edicao-texto" style="color: var(--text-muted); margin-bottom: 1.5rem; margin-top: 1rem; font-size: 0.95rem;">
-                Você está alterando uma receita/despesa fixa na planilha. Esta modificação será aplicada <strong>apenas neste mês específico</strong>. 
-                <br><br>
-                Para alterar para todos os meses futuros de forma definitiva, cancele esta ação e faça a alteração através das Configurações (⚙️).
-            </p>
-            <button id="btn-confirmar-edicao-fixo" class="btn-primary w-100" style="margin-bottom: 0.5rem;">Entendi, confirmar para este mês</button>
-            <button id="btn-cancelar-edicao-fixo" class="btn-secondary w-100">Cancelar</button>
-        </div>
-    </div>
+    </div> <!-- Fim #app-content -->
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-        import { getFirestore } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+        
+        import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+
         const firebaseConfig = {
-          apiKey: "AIzaSyATHMWF2DHmA6jTDjPz_0tZFluIGDFt6Ao",
-          authDomain: "financas-83bb7.firebaseapp.com",
-          projectId: "financas-83bb7",
-          storageBucket: "financas-83bb7.firebasestorage.app",
-          messagingSenderId: "690238088041",
-          appId: "1:690238088041:web:157eb0e04aa305e9ea53f8"
+            apiKey: "AIzaSyATHMWF2DHmA6jTDjPz_0tZFluIGDFt6Ao",
+            authDomain: "financas-83bb7.firebaseapp.com",
+            projectId: "financas-83bb7",
+            storageBucket: "financas-83bb7.firebasestorage.app",
+            messagingSenderId: "690238088041",
+            appId: "1:690238088041:web:157eb0e04aa305e9ea53f8"
         };
+        
         const app = initializeApp(firebaseConfig);
-        window.db = getFirestore(app);
+        
+        window.db = initializeFirestore(app, {
+            localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
+        });
+        
+        window.auth = getAuth(app); 
     </script>
     <script type="module" src="script.js"></script>
-    <script type="module" src="pesquisa.js"></script>
+    <script type="module" src="ano.js"></script>
     <script type="module" src="graficos.js"></script>
     <script type="module" src="investimentos.js"></script>
     <script type="module" src="beneficios.js"></script>
@@ -334,4 +611,5 @@
         });
     </script>
 </body>
+
 </html>

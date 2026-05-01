@@ -1,7 +1,47 @@
-import { collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { collection, addDoc, onSnapshot, query, where, doc, deleteDoc, updateDoc, getDocs, setDoc, getDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+
+// --- Autenticação e Estado do Usuário ---
+let userIdLogado = null;
+let listenersAtivos = [];
+const provider = new GoogleAuthProvider();
+
+onAuthStateChanged(window.auth, (user) => {
+    if (user) {
+        userIdLogado = user.uid;
+        document.getElementById('tela-login').style.display = 'none';
+        document.getElementById('app-content').style.display = 'block';
+        inicializarSincronizacao();
+    } else {
+        userIdLogado = null;
+        document.getElementById('tela-login').style.display = 'flex';
+        document.getElementById('app-content').style.display = 'none';
+        limparSincronizacao();
+    }
+});
+
+document.getElementById('btn-login-google').addEventListener('click', () => {
+    signInWithPopup(window.auth, provider).catch(error => console.error("Erro no login:", error));
+});
+
+document.getElementById('btn-logout').addEventListener('click', () => {
+    signOut(window.auth);
+});
+
+function limparSincronizacao() {
+    listenersAtivos.forEach(unsub => unsub());
+    listenersAtivos = [];
+    transacoes = []; categorias = []; cartoes = []; entradasFixas = []; saidasFixas = [];
+    renderizarLista();
+    renderizarListaCategorias();
+    renderizarListaCartoes();
+    renderizarListaEntradasFixas();
+    renderizarListaSaidasFixas();
+}
 
 // --- Seletores DOM ---
 const btnConfig = document.getElementById('btn-config');
+const btnThemeToggle = document.getElementById('btn-theme-toggle');
 const modalConfiguracoes = document.getElementById('modal-configuracoes');
 const closeBtns = document.querySelectorAll('.close-btn');
 const tabBtns = document.querySelectorAll('.tab-btn');
@@ -11,6 +51,8 @@ const toggleSimulacao = document.getElementById('toggle-ver-simulacoes');
 const filtroCategoria = document.getElementById('filtro-categoria');
 const filtroCartao = document.getElementById('filtro-cartao');
 const filtroStatus = document.getElementById('filtro-status');
+const filtroBusca = document.getElementById('filtro-busca');
+const filtroTipo = document.getElementById('filtro-tipo');
 
 const formInline = document.getElementById('form-inline');
 const selectCategoria = document.getElementById('in-categoria');
@@ -33,33 +75,30 @@ const inputMesPicker = document.getElementById('input-mes-picker');
 
 // --- Estado ---
 let transacoes = [];
-let ultimaDataInserida = new Date().toISOString().split('T')[0]; 
+let ultimaDataInserida = new Date().toISOString().split('T')[0];
 let dataNavegacao = new Date();
 const nomesMeses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
-// Bases agora vazias/limpas para você preencher pelo app
 let categorias = [];
-let cartoes = []; // Inicia vazio
-let entradasFixas = []; // Inicia vazio
-let saidasFixas = []; // Inicia vazio
-// Ordenação Multicritério
+let cartoes = [];
+let entradasFixas = [];
+let saidasFixas = [];
 let listSortConfig = [{ col: 'data', dir: 'desc' }];
 
 document.querySelectorAll('#lista-header .sortable').forEach(span => {
     span.addEventListener('click', () => {
         const col = span.getAttribute('data-sort');
         const existingIndex = listSortConfig.findIndex(s => s.col === col);
-        
+
         if (existingIndex === 0) {
             const defaultDir = (col === 'data' || col === 'valor') ? 'desc' : 'asc';
             if (listSortConfig[0].dir === defaultDir) {
                 listSortConfig[0].dir = defaultDir === 'asc' ? 'desc' : 'asc';
             } else {
-                listSortConfig.shift(); // Remove desativando o filtro
+                listSortConfig.shift(); 
             }
         } else {
             if (existingIndex > 0) listSortConfig.splice(existingIndex, 1);
-            // Ao clicar pela primeira vez, asc para texto e desc para números/datas
             const defaultDir = (col === 'data' || col === 'valor') ? 'desc' : 'asc';
             listSortConfig.unshift({ col: col, dir: defaultDir });
         }
@@ -69,13 +108,43 @@ document.querySelectorAll('#lista-header .sortable').forEach(span => {
 
 // --- Funções Auxiliares e UI ---
 function normalizarStatus(t) {
-    if (t.status) return t.status; 
+    if (t.status) return t.status;
     if (t.simulacao) return 'simulacao';
     if (t.pago) return 'realizada';
-    return 'prevista'; 
+    return 'prevista';
 }
 
-// Coloração do +/-
+function formatarMoeda(valor) {
+    return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor);
+}
+
+function atualizarBackgroundPorMes() {
+    const mesIdx = dataNavegacao.getMonth();
+    const cycleIdx = (mesIdx % 3) + 1;
+    document.body.classList.remove('bg-mes-1', 'bg-mes-2', 'bg-mes-3');
+    document.body.classList.add(`bg-mes-${cycleIdx}`);
+}
+
+function toggleTheme() {
+    if (!btnThemeToggle) return;
+    const isLight = document.body.classList.toggle('light-mode');
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    btnThemeToggle.innerHTML = isLight ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+}
+
+if (btnThemeToggle) btnThemeToggle.addEventListener('click', toggleTheme);
+
+if (localStorage.getItem('theme') === 'light') {
+    document.body.classList.add('light-mode');
+    if (btnThemeToggle) btnThemeToggle.innerHTML = '<i class="fa-solid fa-sun"></i>';
+}
+
+if (localStorage.getItem('verSimulacoes') === 'true') {
+    if (toggleSimulacao) toggleSimulacao.checked = true;
+} else {
+    if (toggleSimulacao) toggleSimulacao.checked = false;
+}
+
 function atualizarCorTipo() {
     if (selectTipo.value === 'entrada') {
         selectTipo.style.color = 'var(--success)';
@@ -92,6 +161,7 @@ function atualizarInterfaceMes() {
     labelMesAtual.innerText = `${nomesMeses[dataNavegacao.getMonth()]} ${dataNavegacao.getFullYear()}`;
     const mesFormatado = String(dataNavegacao.getMonth() + 1).padStart(2, '0');
     if (inputMesPicker) inputMesPicker.value = `${dataNavegacao.getFullYear()}-${mesFormatado}`;
+    atualizarBackgroundPorMes();
     renderizarLista();
 }
 
@@ -125,25 +195,29 @@ tabBtns.forEach(btn => {
 function atualizarCategoriasSelect() {
     selectCategoria.innerHTML = '';
     const tipoAtual = selectTipo.value;
-    const catOrdenadas = [...categorias].sort((a,b) => a.nome.localeCompare(b.nome));
+    const catOrdenadas = [...categorias].sort((a, b) => a.nome.localeCompare(b.nome));
     const catFiltradas = catOrdenadas.filter(c => !c.tipo || c.tipo === 'ambas' || c.tipo === tipoAtual);
-    catFiltradas.forEach(cat => {
-        selectCategoria.appendChild(new Option(cat.nome, cat.nome));
+    catFiltradas.forEach(cat => { selectCategoria.appendChild(new Option(cat.nome, cat.nome)); });
+}
+
+function atualizarFiltroCategorias() {
+    if (!filtroCategoria || !filtroTipo) return;
+    const valTipo = filtroTipo.value;
+    const selectedCat = filtroCategoria.value;
+    filtroCategoria.innerHTML = '<option value="">Todas Categorias</option>';
+    const catOrdenadas = [...categorias].sort((a, b) => a.nome.localeCompare(b.nome));
+    catOrdenadas.filter(c => valTipo === '' || !c.tipo || c.tipo === 'ambas' || c.tipo === valTipo).forEach(cat => {
+        filtroCategoria.appendChild(new Option(cat.nome, cat.nome));
     });
+    if (Array.from(filtroCategoria.options).some(o => o.value === selectedCat)) filtroCategoria.value = selectedCat;
 }
 
 function carregarOpcoesFormulario() {
     atualizarCategoriasSelect();
-    selectCartao.innerHTML = '<option value="">Nenhum (Pix/Dinheiro)</option>';
-    filtroCategoria.innerHTML = '<option value="">Todas Categorias</option>';
+    selectCartao.innerHTML = '<option value="">Débito/pix/dinheiro</option>';
+    atualizarFiltroCategorias();
     filtroCartao.innerHTML = '<option value="">Todos Cartões</option>';
-    
-    const catOrdenadas = [...categorias].sort((a,b) => a.nome.localeCompare(b.nome));
-    const cartoesOrdenados = [...cartoes].sort((a,b) => a.nome.localeCompare(b.nome));
-
-    catOrdenadas.forEach(cat => {
-        filtroCategoria.appendChild(new Option(cat.nome, cat.nome));
-    });
+    const cartoesOrdenados = [...cartoes].sort((a, b) => a.nome.localeCompare(b.nome));
     cartoesOrdenados.forEach(c => {
         selectCartao.appendChild(new Option(c.nome, c.nome));
         filtroCartao.appendChild(new Option(c.nome, c.nome));
@@ -152,7 +226,8 @@ function carregarOpcoesFormulario() {
     const selectCatEntrada = document.getElementById('nova-entrada-fixa-cat');
     const selectCatSaida = document.getElementById('nova-saida-fixa-cat');
     const selectsCartao = [document.getElementById('nova-entrada-fixa-cartao'), document.getElementById('nova-saida-fixa-cartao')];
-    
+    const catOrdenadas = [...categorias].sort((a, b) => a.nome.localeCompare(b.nome));
+
     if (selectCatEntrada) {
         selectCatEntrada.innerHTML = '<option value="">Categoria...</option>';
         catOrdenadas.filter(c => !c.tipo || c.tipo === 'ambas' || c.tipo === 'entrada').forEach(c => selectCatEntrada.appendChild(new Option(c.nome, c.nome)));
@@ -161,42 +236,33 @@ function carregarOpcoesFormulario() {
         selectCatSaida.innerHTML = '<option value="">Categoria...</option>';
         catOrdenadas.filter(c => !c.tipo || c.tipo === 'ambas' || c.tipo === 'saida').forEach(c => selectCatSaida.appendChild(new Option(c.nome, c.nome)));
     }
-    
-    selectsCartao.forEach(sel => { if(sel) { sel.innerHTML = '<option value="">Cartão (Opcional)</option>'; cartoesOrdenados.forEach(c => sel.appendChild(new Option(c.nome, c.nome))); } });
+    selectsCartao.forEach(sel => { if (sel) { sel.innerHTML = '<option value="">Débito/pix/dinheiro</option>'; cartoesOrdenados.forEach(c => sel.appendChild(new Option(c.nome, c.nome))); } });
 }
 
-// Modal helper
 function confirmarAcao(titulo, texto, callbackSim) {
     const modal = document.getElementById('modal-confirmacao');
     document.getElementById('modal-confirmacao-titulo').innerText = titulo;
     document.getElementById('modal-confirmacao-texto').innerHTML = texto;
     modal.style.display = 'flex';
-    
     const btnSim = document.getElementById('btn-confirmacao-sim');
     const btnNao = document.getElementById('btn-confirmacao-nao');
-    
     btnSim.onclick = () => { modal.style.display = 'none'; callbackSim(); };
     btnNao.onclick = () => modal.style.display = 'none';
 }
 
-// Renderizadores de Listas nas Configurações
-function renderizarListaCategorias() {
+function renderizarListaCategorias() { /* ... mantém igual ... */ 
     const listaEntrada = document.getElementById('lista-categorias-entrada');
     const listaSaida = document.getElementById('lista-categorias-saida');
     const listaAmbas = document.getElementById('lista-categorias-ambas');
-    
     if (listaEntrada) listaEntrada.innerHTML = '';
     if (listaSaida) listaSaida.innerHTML = '';
     if (listaAmbas) listaAmbas.innerHTML = '';
-    
-    const catOrdenadas = [...categorias].sort((a,b) => a.nome.localeCompare(b.nome));
+    const catOrdenadas = [...categorias].sort((a, b) => a.nome.localeCompare(b.nome));
     catOrdenadas.forEach(cat => {
         let tipoBadge = '';
-        if (cat.tipo === 'entrada') tipoBadge = '<span style="font-size:0.7rem; background:#d1fae5; color:#065f46; padding:2px 5px; border-radius:4px; margin-left:5px;">Entrada</span>';
+        if (cat.tipo === 'entrada') tipoBadge = '<span style="font-size:0.7rem; background:#fef3c7; color:#92400e; padding:2px 5px; border-radius:4px; margin-left:5px;">Entrada</span>';
         else if (cat.tipo === 'saida') tipoBadge = '<span style="font-size:0.7rem; background:#fee2e2; color:#991b1b; padding:2px 5px; border-radius:4px; margin-left:5px;">Saída</span>';
-        
-        const htmlLi = `
-        <li style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        const htmlLi = `<li style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
             <div style="display: flex; align-items: center; gap: 10px;">
                 <div style="width: 15px; height: 15px; border-radius: 50%; background-color: ${cat.cor};"></div>
                 <span class="cat-nome-texto">${cat.nome}</span>${tipoBadge}
@@ -206,19 +272,17 @@ function renderizarListaCategorias() {
                 <button class="btn-excluir-config" data-id="${cat.id}" data-col="categorias" title="Excluir Categoria" style="color: var(--danger);"><i class="fa-solid fa-trash"></i></button>
             </div>
         </li>`;
-
         if (cat.tipo === 'entrada' && listaEntrada) listaEntrada.innerHTML += htmlLi;
         else if (cat.tipo === 'saida' && listaSaida) listaSaida.innerHTML += htmlLi;
         else if (listaAmbas) listaAmbas.innerHTML += htmlLi;
     });
 }
-function renderizarListaCartoes() {
+function renderizarListaCartoes() { /* ... mantém igual ... */ 
     listaCartoesUI.innerHTML = '';
-    const cartoesOrdenados = [...cartoes].sort((a,b) => a.nome.localeCompare(b.nome));
+    const cartoesOrdenados = [...cartoes].sort((a, b) => a.nome.localeCompare(b.nome));
     cartoesOrdenados.forEach(c => {
         const tipoLabel = c.tipo === 'credito' ? 'Crédito' : (c.tipo === 'debito' ? 'Débito' : 'Cartão');
-        listaCartoesUI.innerHTML += `
-        <li style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        listaCartoesUI.innerHTML += `<li style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
             <div style="display: flex; align-items: center; gap: 10px;">
                 <i class="fa-solid fa-credit-card" style="color: var(--text-muted)"></i> 
                 <span class="cartao-nome-texto">${c.nome}</span>
@@ -231,19 +295,22 @@ function renderizarListaCartoes() {
         </li>`;
     });
 }
-function renderizarListaEntradasFixas() {
+function renderizarListaEntradasFixas() { /* ... mantém igual ... */ 
     listaEntradasFixasUI.innerHTML = '';
     entradasFixas.forEach(g => {
-        const prazo = g.fim ? `${g.inicio} a ${g.fim}` : `A partir de ${g.inicio}`;
-        listaEntradasFixasUI.innerHTML += `
-        <li style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        let infoPrazo = `A partir de ${g.inicio}`;
+        if (g.fim) {
+            const [anoIni, mesIni] = g.inicio.split('-');
+            const [anoFim, mesFim] = g.fim.split('-');
+            const totalParcelas = (parseInt(anoFim) - parseInt(anoIni)) * 12 + (parseInt(mesFim) - parseInt(mesIni)) + 1;
+            infoPrazo = totalParcelas > 0 ? `${g.inicio} a ${g.fim} (${totalParcelas} parcelas)` : `${g.inicio} (Data inválida)`;
+        }
+        listaEntradasFixasUI.innerHTML += `<li style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
             <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;">
-                <strong style="color: var(--success);" class="fixo-desc">${g.desc} (R$ <span class="fixo-valor">${parseFloat(g.valor).toFixed(2).replace('.', ',')}</span>)</strong>
-                <span style="font-size: 0.8rem; color: var(--text-muted);">Dia <span class="fixo-dia">${g.dia}</span> | ${prazo}</span>
-                <input type="hidden" class="fixo-cat" value="${g.categoria || ''}">
-                <input type="hidden" class="fixo-cartao" value="${g.cartao || ''}">
-                <input type="hidden" class="fixo-inicio" value="${g.inicio || ''}">
-                <input type="hidden" class="fixo-fim" value="${g.fim || ''}">
+                <strong style="color: var(--success);" class="fixo-desc">${g.desc}</strong>
+                <span style="font-size: 0.8rem; color: var(--text-muted);">R$ <span class="fixo-valor">${formatarMoeda(g.valor)}</span> | Dia <span class="fixo-dia">${g.dia}</span> | ${infoPrazo}</span>
+                <input type="hidden" class="fixo-cat" value="${g.categoria || ''}"><input type="hidden" class="fixo-cartao" value="${g.cartao || ''}">
+                <input type="hidden" class="fixo-inicio" value="${g.inicio || ''}"><input type="hidden" class="fixo-fim" value="${g.fim || ''}">
             </div>
             <div class="acoes-linha" style="margin-top: 0; padding-top: 0; border: none; flex-shrink: 0;">
                 <button class="btn-editar-fixo-config" data-id="${g.id}" data-col="entradasFixas" title="Editar" style="color: var(--accent); background:none; border:none; cursor:pointer; padding: 5px;"><i class="fa-solid fa-pen"></i></button>
@@ -252,19 +319,22 @@ function renderizarListaEntradasFixas() {
         </li>`;
     });
 }
-function renderizarListaSaidasFixas() {
+function renderizarListaSaidasFixas() { /* ... mantém igual ... */ 
     listaSaidasFixasUI.innerHTML = '';
     saidasFixas.forEach(g => {
-        const prazo = g.fim ? `${g.inicio} a ${g.fim}` : `A partir de ${g.inicio}`;
-        listaSaidasFixasUI.innerHTML += `
-        <li style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        let infoPrazo = `A partir de ${g.inicio}`;
+        if (g.fim) {
+            const [anoIni, mesIni] = g.inicio.split('-');
+            const [anoFim, mesFim] = g.fim.split('-');
+            const totalParcelas = (parseInt(anoFim) - parseInt(anoIni)) * 12 + (parseInt(mesFim) - parseInt(mesIni)) + 1;
+            infoPrazo = totalParcelas > 0 ? `${g.inicio} a ${g.fim} (${totalParcelas} parcelas)` : `${g.inicio} (Data inválida)`;
+        }
+        listaSaidasFixasUI.innerHTML += `<li style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
             <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;">
-                <strong style="color: var(--danger);" class="fixo-desc">${g.desc} (R$ <span class="fixo-valor">${parseFloat(g.valor).toFixed(2).replace('.', ',')}</span>)</strong>
-                <span style="font-size: 0.8rem; color: var(--text-muted);">Dia <span class="fixo-dia">${g.dia}</span> | ${prazo}</span>
-                <input type="hidden" class="fixo-cat" value="${g.categoria || ''}">
-                <input type="hidden" class="fixo-cartao" value="${g.cartao || ''}">
-                <input type="hidden" class="fixo-inicio" value="${g.inicio || ''}">
-                <input type="hidden" class="fixo-fim" value="${g.fim || ''}">
+                <strong style="color: var(--danger);" class="fixo-desc">${g.desc}</strong>
+                <span style="font-size: 0.8rem; color: var(--text-muted);">R$ <span class="fixo-valor">${formatarMoeda(g.valor)}</span> | Dia <span class="fixo-dia">${g.dia}</span> | ${infoPrazo}</span>
+                <input type="hidden" class="fixo-cat" value="${g.categoria || ''}"><input type="hidden" class="fixo-cartao" value="${g.cartao || ''}">
+                <input type="hidden" class="fixo-inicio" value="${g.inicio || ''}"><input type="hidden" class="fixo-fim" value="${g.fim || ''}">
             </div>
             <div class="acoes-linha" style="margin-top: 0; padding-top: 0; border: none; flex-shrink: 0;">
                 <button class="btn-editar-fixo-config" data-id="${g.id}" data-col="gastosFixos" title="Editar" style="color: var(--accent); background:none; border:none; cursor:pointer; padding: 5px;"><i class="fa-solid fa-pen"></i></button>
@@ -281,15 +351,13 @@ function solicitarImpactoFixo(callback) {
     const btnConfirmar = document.getElementById('btn-confirmar-impacto');
     const btnCancelar = document.getElementById('btn-cancelar-impacto');
     const radios = document.getElementsByName('impacto-fixo');
-    radios[0].checked = true; // reset selection
+    radios[0].checked = true;
 
     modal.style.display = 'flex';
-    
-    // Timer 5s
     let timeLeft = 5;
     btnConfirmar.disabled = true;
     btnConfirmar.innerText = `Confirmar (${timeLeft}s)`;
-    
+
     if (impactoTimer) clearInterval(impactoTimer);
     impactoTimer = setInterval(() => {
         timeLeft--;
@@ -311,10 +379,8 @@ function solicitarImpactoFixo(callback) {
 
     document.getElementById('btn-confirmar-impacto').addEventListener('click', () => {
         const impacto = Array.from(radios).find(r => r.checked).value;
-        limparModal();
-        callback(impacto);
+        limparModal(); callback(impacto);
     });
-
     document.getElementById('btn-cancelar-impacto').addEventListener('click', limparModal);
 }
 
@@ -328,7 +394,7 @@ document.addEventListener('click', async (e) => {
     const btnEditarCategoria = e.target.closest('.btn-editar-categoria');
     const btnSalvarCategoria = e.target.closest('.btn-salvar-categoria');
     const btnCancelarCategoria = e.target.closest('.btn-cancelar-categoria');
-    
+
     const btnEditarCartao = e.target.closest('.btn-editar-cartao');
     const btnSalvarCartao = e.target.closest('.btn-salvar-cartao');
     const btnCancelarCartao = e.target.closest('.btn-cancelar-cartao');
@@ -340,10 +406,13 @@ document.addEventListener('click', async (e) => {
             if (impacto === 'todos') {
                 await deleteDoc(doc(window.db, col, id));
                 const campoFixoId = col === 'entradasFixas' ? 'entradaFixaId' : 'gastoFixoId';
-                transacoes.forEach(async (t) => {
-                    if (t[campoFixoId] === id && t.id && !t.isProjection) {
-                        await deleteDoc(doc(window.db, "transacoes", t.id));
-                    }
+                // ATUALIZADO PARA ARRAYS: Percorrer meses e limpar
+                const docsSnap = await getDocs(query(collection(window.db, "dados_mensais"), where("userId", "==", userIdLogado)));
+                docsSnap.forEach(async (dSnap) => {
+                    let arr = dSnap.data().transacoes || [];
+                    const lenAntes = arr.length;
+                    arr = arr.filter(t => !(t[campoFixoId] === id && t.id && !t.isProjection));
+                    if (arr.length !== lenAntes) await updateDoc(dSnap.ref, { transacoes: arr });
                 });
             } else if (impacto === 'frente') {
                 const dataNav = new Date(dataNavegacao.getFullYear(), dataNavegacao.getMonth());
@@ -358,24 +427,23 @@ document.addEventListener('click', async (e) => {
         const li = btnEditarFixoConfig.closest('li');
         const id = btnEditarFixoConfig.getAttribute('data-id');
         const col = btnEditarFixoConfig.getAttribute('data-col');
-        
-        const desc = li.querySelector('.fixo-desc').childNodes[0].nodeValue.trim().replace(' (R$ ', '');
-        const valor = li.querySelector('.fixo-valor').innerText.replace(',', '.');
+        const desc = li.querySelector('.fixo-desc').innerText.trim().split(' (R$')[0];
+        const valor = li.querySelector('.fixo-valor').innerText.replace(/\./g, '').replace(',', '.');
         const dia = li.querySelector('.fixo-dia').innerText;
         const cat = li.querySelector('.fixo-cat').value;
         const cartao = li.querySelector('.fixo-cartao').value;
         const inicio = li.querySelector('.fixo-inicio').value;
         const fim = li.querySelector('.fixo-fim').value;
 
-        const catOrdenadas = [...categorias].sort((a,b) => a.nome.localeCompare(b.nome));
+        const catOrdenadas = [...categorias].sort((a, b) => a.nome.localeCompare(b.nome));
         const tipoFixo = col === 'entradasFixas' ? 'entrada' : 'saida';
         const catFiltradas = catOrdenadas.filter(c => !c.tipo || c.tipo === 'ambas' || c.tipo === tipoFixo);
-        const cartoesOrdenados = [...cartoes].sort((a,b) => a.nome.localeCompare(b.nome));
+        const cartoesOrdenados = [...cartoes].sort((a, b) => a.nome.localeCompare(b.nome));
 
         let catOptions = '<option value="">Categoria...</option>';
-        catFiltradas.forEach(c => catOptions += `<option value="${c.nome}" ${c.nome===cat?'selected':''}>${c.nome}</option>`);
-        let cartaoOptions = '<option value="">Cartão (Opcional)</option>';
-        cartoesOrdenados.forEach(c => cartaoOptions += `<option value="${c.nome}" ${c.nome===cartao?'selected':''}>${c.nome}</option>`);
+        catFiltradas.forEach(c => catOptions += `<option value="${c.nome}" ${c.nome === cat ? 'selected' : ''}>${c.nome}</option>`);
+        let cartaoOptions = '<option value="">Débito/pix/dinheiro</option>';
+        cartoesOrdenados.forEach(c => cartaoOptions += `<option value="${c.nome}" ${c.nome === cartao ? 'selected' : ''}>${c.nome}</option>`);
 
         li.innerHTML = `
             <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
@@ -397,8 +465,7 @@ document.addEventListener('click', async (e) => {
                     <button class="btn-salvar-fixo-config btn-primary" data-id="${id}" data-col="${col}" style="flex: 1; padding: 5px;"><i class="fa-solid fa-check"></i> Salvar</button>
                     <button class="btn-cancelar-fixo-config btn-secondary" style="flex: 1; padding: 5px;">Cancelar</button>
                 </div>
-            </div>
-        `;
+            </div>`;
     }
 
     if (btnCancelarFixoConfig) {
@@ -410,7 +477,7 @@ document.addEventListener('click', async (e) => {
         const li = btnSalvarFixoConfig.closest('li');
         const id = btnSalvarFixoConfig.getAttribute('data-id');
         const col = btnSalvarFixoConfig.getAttribute('data-col');
-        
+
         const novosDados = {
             desc: li.querySelector('.edit-fixo-desc').value,
             valor: parseFloat(li.querySelector('.edit-fixo-valor').value),
@@ -425,29 +492,35 @@ document.addEventListener('click', async (e) => {
             if (impacto === 'todos') {
                 await updateDoc(doc(window.db, col, id), novosDados);
                 const campoFixoId = col === 'entradasFixas' ? 'entradaFixaId' : 'gastoFixoId';
-                transacoes.forEach(async (t) => {
-                    if (t[campoFixoId] === id && t.id && !t.isProjection) {
-                        const novoDia = String(novosDados.dia).padStart(2, '0');
-                        const dataAtualizada = t.data.substring(0, 8) + novoDia; 
-                        await updateDoc(doc(window.db, "transacoes", t.id), {
-                            descricao: novosDados.desc,
-                            valor: novosDados.valor,
-                            categoria: novosDados.categoria,
-                            cartao: novosDados.cartao,
-                            data: dataAtualizada
-                        });
-                    }
+                
+                // ATUALIZADO PARA ARRAYS: Percorrer meses
+                const docsSnap = await getDocs(query(collection(window.db, "dados_mensais"), where("userId", "==", userIdLogado)));
+                docsSnap.forEach(async (dSnap) => {
+                    let changed = false;
+                    let arr = dSnap.data().transacoes || [];
+                    arr = arr.map(t => {
+                        if (t[campoFixoId] === id && t.id && !t.isProjection) {
+                            changed = true;
+                            const novoDia = String(novosDados.dia).padStart(2, '0');
+                            const dataAtualizada = t.data.substring(0, 8) + novoDia;
+                            return { ...t, descricao: novosDados.desc, valor: novosDados.valor, categoria: novosDados.categoria, cartao: novosDados.cartao, data: dataAtualizada };
+                        }
+                        return t;
+                    });
+                    if(changed) await updateDoc(dSnap.ref, { transacoes: arr });
                 });
             } else if (impacto === 'frente') {
                 const dataNav = new Date(dataNavegacao.getFullYear(), dataNavegacao.getMonth());
                 dataNav.setMonth(dataNav.getMonth() - 1);
                 const mesPassado = `${dataNav.getFullYear()}-${String(dataNav.getMonth() + 1).padStart(2, '0')}`;
-                
                 await updateDoc(doc(window.db, col, id), { fim: mesPassado });
-                
+
                 novosDados.inicio = `${dataNavegacao.getFullYear()}-${String(dataNavegacao.getMonth() + 1).padStart(2, '0')}`;
+                novosDados.userId = userIdLogado;
                 await addDoc(collection(window.db, col), novosDados);
             }
+            renderizarListaEntradasFixas();
+            renderizarListaSaidasFixas();
         });
     }
 
@@ -455,16 +528,12 @@ document.addEventListener('click', async (e) => {
         const col = btnExcluirConfig.getAttribute('data-col');
         const nomeItem = btnExcluirConfig.getAttribute('data-nome');
         const tipoStr = col === 'categorias' ? 'esta categoria' : 'este cartão';
-        
         let avisoEmUso = "";
         if (col === 'cartoes' && nomeItem) {
             const emUso = transacoes.some(t => t.cartao === nomeItem && t.status !== 'excluida') || saidasFixas.some(g => g.cartao === nomeItem) || entradasFixas.some(g => g.cartao === nomeItem);
-            if (emUso) {
-                avisoEmUso = "<br><br><strong style='color:var(--danger)'>⚠️ AVISO: Este cartão está sendo usado em transações ou gastos fixos. Excluí-lo afetará a visualização desses registros.</strong>";
-            }
+            if (emUso) avisoEmUso = "<br><br><strong style='color:var(--danger)'>⚠️ AVISO: Este cartão está sendo usado. Excluí-lo afetará o histórico.</strong>";
         }
-        
-        confirmarAcao("Excluir", `Tem certeza que deseja excluir ${tipoStr} permanentemente? Os registros já existentes não serão apagados.${avisoEmUso}`, async () => {
+        confirmarAcao("Excluir", `Tem certeza que deseja excluir ${tipoStr} permanentemente?${avisoEmUso}`, async () => {
             await deleteDoc(doc(window.db, col, btnExcluirConfig.getAttribute('data-id')));
         });
     }
@@ -480,9 +549,9 @@ document.addEventListener('click', async (e) => {
             <div style="display: flex; gap: 5px; width: 100%;">
                 <input type="text" class="edit-cat-nome" value="${nomeTexto}" data-old-nome="${nomeTexto}" style="flex: 1; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
                 <select class="edit-cat-tipo" style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
-                    <option value="ambas" ${tipo==='ambas'?'selected':''}>Ambas</option>
-                    <option value="entrada" ${tipo==='entrada'?'selected':''}>Entrada</option>
-                    <option value="saida" ${tipo==='saida'?'selected':''}>Saída</option>
+                    <option value="ambas" ${tipo === 'ambas' ? 'selected' : ''}>Ambas</option>
+                    <option value="entrada" ${tipo === 'entrada' ? 'selected' : ''}>Entrada</option>
+                    <option value="saida" ${tipo === 'saida' ? 'selected' : ''}>Saída</option>
                 </select>
                 <input type="color" class="edit-cat-cor" value="${cor}" style="width: 40px; height: 35px; border: 1px solid var(--border); border-radius: 4px; padding: 0;">
                 <button class="btn-salvar-categoria" data-id="${id}" style="color: var(--success); background: none; border: none; cursor: pointer; font-size: 1.1rem; margin-left: 5px;"><i class="fa-solid fa-check"></i></button>
@@ -498,15 +567,22 @@ document.addEventListener('click', async (e) => {
         const nomeAntigo = li.querySelector('.edit-cat-nome').getAttribute('data-old-nome');
         const novaCor = li.querySelector('.edit-cat-cor').value;
         const novoTipo = li.querySelector('.edit-cat-tipo').value;
-        
+
         await updateDoc(doc(window.db, "categorias", id), { nome: novoNome, cor: novaCor, tipo: novoTipo });
-        
+
         if (novoNome !== nomeAntigo) {
-            transacoes.forEach(async (t) => {
-                if (t.categoria === nomeAntigo && t.id && !t.isProjection) {
-                    await updateDoc(doc(window.db, "transacoes", t.id), { categoria: novoNome });
-                }
+            // ATUALIZADO PARA ARRAYS
+            const docsSnap = await getDocs(query(collection(window.db, "dados_mensais"), where("userId", "==", userIdLogado)));
+            docsSnap.forEach(async (dSnap) => {
+                let changed = false;
+                let arr = dSnap.data().transacoes || [];
+                arr = arr.map(t => {
+                    if (t.categoria === nomeAntigo && !t.isProjection) { changed = true; return {...t, categoria: novoNome}; }
+                    return t;
+                });
+                if(changed) await updateDoc(dSnap.ref, { transacoes: arr });
             });
+
             entradasFixas.forEach(async (t) => {
                 if (t.categoria === nomeAntigo) await updateDoc(doc(window.db, "entradasFixas", t.id), { categoria: novoNome });
             });
@@ -516,29 +592,24 @@ document.addEventListener('click', async (e) => {
         }
     }
 
-    if (btnCancelarCategoria) {
-        renderizarListaCategorias();
-    }
+    if (btnCancelarCategoria) renderizarListaCategorias();
 
     if (btnEditarCartao) {
         const li = btnEditarCartao.closest('li');
         const id = btnEditarCartao.getAttribute('data-id');
         const tipo = btnEditarCartao.getAttribute('data-tipo');
         const nomeTexto = li.querySelector('.cartao-nome-texto').innerText;
-
         let avisoEmUso = "";
         const emUso = transacoes.some(t => t.cartao === nomeTexto && t.status !== 'excluida') || saidasFixas.some(g => g.cartao === nomeTexto) || entradasFixas.some(g => g.cartao === nomeTexto);
-        if (emUso) {
-            avisoEmUso = "<div style='color:var(--danger); font-size: 0.75rem; margin-top: 5px; width: 100%; text-align: left;'>⚠️ Cartão em uso. Edições afetarão lançamentos existentes.</div>";
-        }
+        if (emUso) avisoEmUso = "<div style='color:var(--danger); font-size: 0.75rem; margin-top: 5px; width: 100%; text-align: left;'>⚠️ Cartão em uso. Edições afetarão lançamentos existentes.</div>";
 
         li.innerHTML = `
             <div style="display: flex; flex-direction: column; width: 100%;">
                 <div style="display: flex; gap: 5px; width: 100%;">
                     <input type="text" class="edit-cartao-nome" value="${nomeTexto}" data-old-nome="${nomeTexto}" style="flex: 1; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
                     <select class="edit-cartao-tipo" style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
-                        <option value="credito" ${tipo==='credito'?'selected':''}>Crédito</option>
-                        <option value="debito" ${tipo==='debito'?'selected':''}>Débito</option>
+                        <option value="credito" ${tipo === 'credito' ? 'selected' : ''}>Crédito</option>
+                        <option value="debito" ${tipo === 'debito' ? 'selected' : ''}>Débito</option>
                     </select>
                     <button class="btn-salvar-cartao" data-id="${id}" style="color: var(--success); background: none; border: none; cursor: pointer; font-size: 1.1rem; margin-left: 5px;"><i class="fa-solid fa-check"></i></button>
                     <button class="btn-cancelar-cartao" style="color: var(--text-muted); background: none; border: none; cursor: pointer; font-size: 1.1rem; margin-left: 5px;"><i class="fa-solid fa-times"></i></button>
@@ -554,15 +625,22 @@ document.addEventListener('click', async (e) => {
         const novoNome = li.querySelector('.edit-cartao-nome').value;
         const nomeAntigo = li.querySelector('.edit-cartao-nome').getAttribute('data-old-nome');
         const novoTipo = li.querySelector('.edit-cartao-tipo').value;
-        
+
         await updateDoc(doc(window.db, "cartoes", id), { nome: novoNome, tipo: novoTipo });
-        
+
         if (novoNome !== nomeAntigo) {
-            transacoes.forEach(async (t) => {
-                if (t.cartao === nomeAntigo && t.id && !t.isProjection) {
-                    await updateDoc(doc(window.db, "transacoes", t.id), { cartao: novoNome });
-                }
+            // ATUALIZADO PARA ARRAYS
+            const docsSnap = await getDocs(query(collection(window.db, "dados_mensais"), where("userId", "==", userIdLogado)));
+            docsSnap.forEach(async (dSnap) => {
+                let changed = false;
+                let arr = dSnap.data().transacoes || [];
+                arr = arr.map(t => {
+                    if (t.cartao === nomeAntigo && !t.isProjection) { changed = true; return {...t, cartao: novoNome}; }
+                    return t;
+                });
+                if(changed) await updateDoc(dSnap.ref, { transacoes: arr });
             });
+
             entradasFixas.forEach(async (t) => {
                 if (t.cartao === nomeAntigo) await updateDoc(doc(window.db, "entradasFixas", t.id), { cartao: novoNome });
             });
@@ -572,34 +650,34 @@ document.addEventListener('click', async (e) => {
         }
     }
 
-    if (btnCancelarCartao) {
-        renderizarListaCartoes();
-    }
+    if (btnCancelarCartao) renderizarListaCartoes();
 });
 
 // Eventos de Submissão das Configurações
 formCategoria.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!window.db) return;
+    if (!window.db || !userIdLogado) return;
     await addDoc(collection(window.db, "categorias"), {
         nome: document.getElementById('nova-cat-nome').value,
         cor: document.getElementById('nova-cat-cor').value,
-        tipo: document.getElementById('nova-cat-tipo').value
+        tipo: document.getElementById('nova-cat-tipo').value,
+        userId: userIdLogado
     });
     document.getElementById('form-categoria').reset();
 });
 formCartao.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!window.db) return;
+    if (!window.db || !userIdLogado) return;
     await addDoc(collection(window.db, "cartoes"), {
         nome: document.getElementById('novo-cartao-nome').value,
-        tipo: document.getElementById('novo-cartao-tipo').value
+        tipo: document.getElementById('novo-cartao-tipo').value,
+        userId: userIdLogado
     });
     document.getElementById('form-cartao').reset();
 });
 formEntradasFixas.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!window.db) return;
+    if (!window.db || !userIdLogado) return;
     await addDoc(collection(window.db, "entradasFixas"), {
         desc: document.getElementById('nova-entrada-fixa-desc').value,
         valor: parseFloat(document.getElementById('nova-entrada-fixa-valor').value),
@@ -607,21 +685,23 @@ formEntradasFixas.addEventListener('submit', async (e) => {
         categoria: document.getElementById('nova-entrada-fixa-cat').value,
         cartao: document.getElementById('nova-entrada-fixa-cartao').value,
         inicio: document.getElementById('nova-entrada-fixa-inicio').value || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`,
-        fim: document.getElementById('nova-entrada-fixa-fim').value
+        fim: document.getElementById('nova-entrada-fixa-fim').value,
+        userId: userIdLogado
     });
     document.getElementById('form-entradas-fixas').reset();
 });
 formSaidasFixas.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!window.db) return;
-    await addDoc(collection(window.db, "gastosFixos"), { // Mantido na mesma coleção 'gastosFixos' para não perder dados antigos
+    if (!window.db || !userIdLogado) return;
+    await addDoc(collection(window.db, "gastosFixos"), {
         desc: document.getElementById('nova-saida-fixa-desc').value,
         valor: parseFloat(document.getElementById('nova-saida-fixa-valor').value),
         dia: document.getElementById('nova-saida-fixa-dia').value,
         categoria: document.getElementById('nova-saida-fixa-cat').value,
         cartao: document.getElementById('nova-saida-fixa-cartao').value,
         inicio: document.getElementById('nova-saida-fixa-inicio').value || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`,
-        fim: document.getElementById('nova-saida-fixa-fim').value
+        fim: document.getElementById('nova-saida-fixa-fim').value,
+        userId: userIdLogado
     });
     document.getElementById('form-saidas-fixas').reset();
 });
@@ -643,58 +723,39 @@ function getMesCobranca(yyyy_mm) {
 
 function atualizarResumo(transacoesRenderizadas, mesNavString) {
     const mesAnteriorStr = getMesAnterior(mesNavString);
-
-    let totalEntradasMes = 0;
-    let totalSaidasVistaMes = 0;
-    let totalUsoCartaoMes = 0;
-    let totalFaturaAnterior = 0;
+    let totalEntradasMes = 0; let totalSaidasVistaMes = 0; let totalUsoCartaoMes = 0; let totalFaturaAnterior = 0;
 
     const checkIsCredito = (nomeCartao) => {
         if (!nomeCartao || nomeCartao === '') return false;
         const cObj = cartoes.find(c => c.nome === nomeCartao);
-        return cObj && (cObj.tipo === 'credito' || !cObj.tipo); // antigos default para crédito
+        return cObj && (cObj.tipo === 'credito' || !cObj.tipo);
     };
 
-    // 1. Cálculos do mês atual
     transacoesRenderizadas.forEach(t => {
         if (t.status === 'excluida') return;
-        
-        if (t.tipo === 'entrada') {
-            totalEntradasMes += t.valor;
-        } else if (t.tipo === 'saida') {
-            if (checkIsCredito(t.cartao)) {
-                totalUsoCartaoMes += t.valor; // Cartões (Mês Atual)
-            } else {
-                totalSaidasVistaMes += t.valor; // Gastos à vista ou Débito
-            }
+        if (t.tipo === 'entrada') totalEntradasMes += t.valor;
+        else if (t.tipo === 'saida') {
+            if (checkIsCredito(t.cartao)) totalUsoCartaoMes += t.valor;
+            else totalSaidasVistaMes += t.valor;
         }
     });
 
-    // 2. Fatura do mês anterior (Cartão Mês Anterior)
     transacoes.forEach(t => {
         if (t.status === 'excluida') return;
         const tMes = t.data.substring(0, 7);
         if (tMes === mesAnteriorStr && t.tipo === 'saida' && checkIsCredito(t.cartao)) {
-            if (normalizarStatus(t) !== 'simulacao') {
-                totalFaturaAnterior += t.valor;
-            }
+            if (normalizarStatus(t) !== 'simulacao') totalFaturaAnterior += t.valor;
         }
     });
 
-    // Projeções fixas de cartão do mês passado
     saidasFixas.forEach(g => {
         if (checkIsCredito(g.cartao) && mesAnteriorStr >= g.inicio && (!g.fim || mesAnteriorStr <= g.fim)) {
-            const jaExiste = transacoes.some(t => t.gastoFixoId === g.id && t.data.startsWith(mesAnteriorStr) && t.status !== 'excluida');
-            if (!jaExiste) {
-                totalFaturaAnterior += parseFloat(g.valor);
-            }
+            const jaExiste = transacoes.some(t => t.gastoFixoId === g.id && t.data.startsWith(mesAnteriorStr));
+            if (!jaExiste) totalFaturaAnterior += parseFloat(g.valor);
         }
     });
 
-    // 3. Saldo Global (Efetivo e Projetado)
-    let totalEfetivo = 0;
-    let totalProjetado = 0;
-
+    let totalEfetivo = 0; let totalProjetado = 0;
     const processTransactionForBalance = (t) => {
         if (t.status === 'excluida') return;
         const tMes = t.data.substring(0, 7);
@@ -702,30 +763,20 @@ function atualizarResumo(transacoesRenderizadas, mesNavString) {
         const mesImpacto = isCartaoCredito ? getMesCobranca(tMes) : tMes;
 
         if (mesImpacto <= mesNavString) {
-            if (normalizarStatus(t) === 'realizada') {
-                t.tipo === 'entrada' ? totalEfetivo += t.valor : totalEfetivo -= t.valor;
-            }
-            if (normalizarStatus(t) !== 'simulacao') {
-                t.tipo === 'entrada' ? totalProjetado += t.valor : totalProjetado -= t.valor;
-            }
+            if (normalizarStatus(t) === 'realizada') { t.tipo === 'entrada' ? totalEfetivo += t.valor : totalEfetivo -= t.valor; }
+            if (normalizarStatus(t) !== 'simulacao') { t.tipo === 'entrada' ? totalProjetado += t.valor : totalProjetado -= t.valor; }
         }
     };
 
     transacoes.forEach(processTransactionForBalance);
 
-    // Iterar todas as projeções fixas passadas e atuais para refletir corretamente nos saldos
     const gerarMesesAte = (inicio, fim) => {
         if (!inicio) return [];
-        const meses = [];
-        let [anoI, mesI] = inicio.split('-').map(Number);
+        const meses = []; let [anoI, mesI] = inicio.split('-').map(Number);
         const [anoF, mesF] = fim.split('-').map(Number);
         while (anoI < anoF || (anoI === anoF && mesI <= mesF)) {
             meses.push(`${anoI}-${String(mesI).padStart(2, '0')}`);
-            mesI++;
-            if (mesI > 12) {
-                mesI = 1;
-                anoI++;
-            }
+            mesI++; if (mesI > 12) { mesI = 1; anoI++; }
         }
         return meses;
     };
@@ -734,16 +785,8 @@ function atualizarResumo(transacoesRenderizadas, mesNavString) {
         const limiteFim = (g.fim && g.fim < mesNavString) ? g.fim : mesNavString;
         if (g.inicio && g.inicio <= limiteFim) {
             gerarMesesAte(g.inicio, limiteFim).forEach(mesProj => {
-                const jaExiste = transacoes.some(t => t.entradaFixaId === g.id && t.data.startsWith(mesProj) && t.status !== 'excluida');
-                if (!jaExiste) {
-                    processTransactionForBalance({
-                        status: 'prevista',
-                        data: `${mesProj}-01`,
-                        tipo: 'entrada',
-                        cartao: g.cartao,
-                        valor: parseFloat(g.valor)
-                    });
-                }
+                const jaExiste = transacoes.some(t => t.entradaFixaId === g.id && t.data.startsWith(mesProj));
+                if (!jaExiste) processTransactionForBalance({ status: 'prevista', data: `${mesProj}-01`, tipo: 'entrada', cartao: g.cartao, valor: parseFloat(g.valor) });
             });
         }
     });
@@ -752,26 +795,18 @@ function atualizarResumo(transacoesRenderizadas, mesNavString) {
         const limiteFim = (g.fim && g.fim < mesNavString) ? g.fim : mesNavString;
         if (g.inicio && g.inicio <= limiteFim) {
             gerarMesesAte(g.inicio, limiteFim).forEach(mesProj => {
-                const jaExiste = transacoes.some(t => t.gastoFixoId === g.id && t.data.startsWith(mesProj) && t.status !== 'excluida');
-                if (!jaExiste) {
-                    processTransactionForBalance({
-                        status: 'prevista',
-                        data: `${mesProj}-01`,
-                        tipo: 'saida',
-                        cartao: g.cartao,
-                        valor: parseFloat(g.valor)
-                    });
-                }
+                const jaExiste = transacoes.some(t => t.gastoFixoId === g.id && t.data.startsWith(mesProj));
+                if (!jaExiste) processTransactionForBalance({ status: 'prevista', data: `${mesProj}-01`, tipo: 'saida', cartao: g.cartao, valor: parseFloat(g.valor) });
             });
         }
     });
 
-    document.getElementById('total-entradas').innerText = `R$ ${totalEntradasMes.toFixed(2).replace('.', ',')}`;
-    document.getElementById('total-saidas').innerText = `R$ ${totalSaidasVistaMes.toFixed(2).replace('.', ',')}`;
-    document.getElementById('total-fatura').innerText = `R$ ${totalFaturaAnterior.toFixed(2).replace('.', ',')}`;
-    document.getElementById('total-cartao-mes').innerText = `R$ ${totalUsoCartaoMes.toFixed(2).replace('.', ',')}`;
-    document.getElementById('saldo-atual').innerText = `R$ ${totalEfetivo.toFixed(2).replace('.', ',')}`;
-    document.getElementById('saldo-previsto').innerText = `R$ ${totalProjetado.toFixed(2).replace('.', ',')}`;
+    document.getElementById('total-entradas').innerText = `R$\u00A0${formatarMoeda(totalEntradasMes)}`;
+    document.getElementById('total-saidas').innerText = `R$\u00A0${formatarMoeda(totalSaidasVistaMes)}`;
+    document.getElementById('total-fatura').innerText = `R$\u00A0${formatarMoeda(totalFaturaAnterior)}`;
+    document.getElementById('total-cartao-mes').innerText = `R$\u00A0${formatarMoeda(totalUsoCartaoMes)}`;
+    document.getElementById('saldo-atual').innerText = `R$\u00A0${formatarMoeda(totalEfetivo)}`;
+    document.getElementById('saldo-previsto').innerText = `R$\u00A0${formatarMoeda(totalProjetado)}`;
 }
 
 function gerarOptionsSelect(lista, valorSelecionado) {
@@ -784,8 +819,7 @@ function renderizarLista() {
     const prefixoData = `${dataNavegacao.getFullYear()}-${mesFormatado}`;
     const navYYYYMM = prefixoData;
     const incluirSimulacoes = toggleSimulacao.checked;
-    
-    // Auto-projetar fixos (entradas e saídas)
+
     const transacoesProjeto = [];
     entradasFixas.forEach(g => {
         if (navYYYYMM >= g.inicio && (!g.fim || navYYYYMM <= g.fim)) {
@@ -793,15 +827,10 @@ function renderizarLista() {
             if (!jaExiste) {
                 transacoesProjeto.push({
                     id: 'proje_' + g.id + '_' + navYYYYMM,
-                    entradaFixaId: g.id,
-                    isProjection: true,
-                    tipo: 'entrada',
-                    descricao: g.desc,
-                    valor: parseFloat(g.valor),
+                    entradaFixaId: g.id, isProjection: true, tipo: 'entrada',
+                    descricao: g.desc, valor: parseFloat(g.valor),
                     data: `${navYYYYMM}-${String(g.dia).padStart(2, '0')}`,
-                    categoria: g.categoria || 'Sem Categoria',
-                    cartao: g.cartao || '',
-                    status: 'prevista'
+                    categoria: g.categoria || 'Sem Categoria', cartao: g.cartao || '', status: 'prevista'
                 });
             }
         }
@@ -813,41 +842,43 @@ function renderizarLista() {
             if (!jaExiste) {
                 transacoesProjeto.push({
                     id: 'projs_' + g.id + '_' + navYYYYMM,
-                    gastoFixoId: g.id,
-                    isProjection: true,
-                    tipo: 'saida',
-                    descricao: g.desc,
-                    valor: parseFloat(g.valor),
+                    gastoFixoId: g.id, isProjection: true, tipo: 'saida',
+                    descricao: g.desc, valor: parseFloat(g.valor),
                     data: `${navYYYYMM}-${String(g.dia).padStart(2, '0')}`,
-                    categoria: g.categoria || 'Sem Categoria',
-                    cartao: g.cartao || '',
-                    status: 'prevista'
+                    categoria: g.categoria || 'Sem Categoria', cartao: g.cartao || '', status: 'prevista'
                 });
             }
         }
     });
 
     const todasTransacoes = [...transacoes, ...transacoesProjeto];
-    
-    // Aplicar filtros
+
     const valCat = filtroCategoria.value;
     const valCartao = filtroCartao.value;
     const valStatus = filtroStatus.value;
+    const valBusca = filtroBusca.value.toLowerCase().trim();
+    const valTipo = filtroTipo.value;
+
+    filtroBusca.classList.toggle('filtro-ativo', valBusca !== '');
+    filtroTipo.classList.toggle('filtro-ativo', valTipo !== '');
+    filtroCategoria.classList.toggle('filtro-ativo', valCat !== '');
+    filtroCartao.classList.toggle('filtro-ativo', valCartao !== '');
+    filtroStatus.classList.toggle('filtro-ativo', valStatus !== '');
 
     let transacoesFiltradas = todasTransacoes.filter(t => {
         if (t.status === 'excluida') return false;
         const tStatus = normalizarStatus(t);
         const passaSimulacao = incluirSimulacoes ? true : tStatus !== 'simulacao';
         const passaMes = t.data.startsWith(prefixoData);
-        
+        let passaTipo = valTipo === '' || t.tipo === valTipo;
         let passaCat = valCat === '' || t.categoria === valCat;
         let passaCartao = valCartao === '' || t.cartao === valCartao;
         let passaStatus = valStatus === '' || tStatus === valStatus;
-        
-        return passaSimulacao && passaMes && passaCat && passaCartao && passaStatus;
+        let passaBusca = valBusca === '' || t.descricao.toLowerCase().includes(valBusca);
+
+        return passaSimulacao && passaMes && passaTipo && passaCat && passaCartao && passaStatus && passaBusca;
     });
 
-    // Ordenar de acordo com o filtro multicritério
     if (listSortConfig.length === 0) {
         transacoesFiltradas.sort((a, b) => b.data.localeCompare(a.data));
     } else {
@@ -866,62 +897,55 @@ function renderizarLista() {
                 if (typeof valA === 'string') cmp = valA.localeCompare(valB);
                 else cmp = valA - valB;
 
-                if (cmp !== 0) {
-                    return criteria.dir === 'asc' ? cmp : -cmp;
-                }
+                if (cmp !== 0) { return criteria.dir === 'asc' ? cmp : -cmp; }
             }
             return 0;
         });
     }
 
-    // Atualizar UI dos cabeçalhos
     document.querySelectorAll('#lista-header .sortable').forEach(span => {
         const col = span.getAttribute('data-sort');
         const icon = span.querySelector('i');
         span.classList.remove('active-sort-asc', 'active-sort-desc');
-        
         const sortIndex = listSortConfig.findIndex(s => s.col === col);
-        
         if (sortIndex !== -1) {
             const dir = listSortConfig[sortIndex].dir;
             span.classList.add(dir === 'asc' ? 'active-sort-asc' : 'active-sort-desc');
             icon.className = dir === 'asc' ? 'fa-solid fa-sort-up' : 'fa-solid fa-sort-down';
-            // Deixa o ícone primário mais evidente, os secundários ficam levemente transparentes via CSS, mas aqui mostramos a direção de todos ativados.
         } else {
             icon.className = 'fa-solid fa-sort';
         }
     });
 
-    transacoesFiltradas.forEach(t => {
+    transacoesFiltradas.forEach((t, index) => {
         const li = document.createElement('li');
         li.setAttribute('data-id', t.id);
-        
+
         const tStatus = normalizarStatus(t);
         if (tStatus === 'simulacao') li.classList.add('simulacao-row');
-        
-        const valorFormatado = `R$ ${t.valor.toFixed(2).replace('.', ',')}`;
+
+        const valorFormatado = `R$\u00A0${formatarMoeda(t.valor)}`;
         const classeValor = t.tipo === 'entrada' ? 'valor-entrada' : 'valor-saida';
         const sinal = t.tipo === 'entrada' ? '+' : '-';
-        
+
         let labelStatus = '';
-        if(tStatus === 'realizada') labelStatus = `<span class="badge realizada">Realizada</span>`;
-        if(tStatus === 'prevista') labelStatus = `<span class="badge prevista">Previsto</span>`;
-        if(tStatus === 'simulacao') labelStatus = `<span class="badge simulacao">Simulação</span>`;
+        if (tStatus === 'realizada') labelStatus = `<span class="badge realizada">Realizada</span>`;
+        if (tStatus === 'prevista') labelStatus = `<span class="badge prevista">Previsto</span>`;
+        if (tStatus === 'simulacao') labelStatus = `<span class="badge simulacao">Simulação</span>`;
 
         let descFinal = t.descricao;
+        let parcelaInfo = "";
         let fixoOrigem = t.gastoFixoId ? saidasFixas.find(g => g.id === t.gastoFixoId) : (t.entradaFixaId ? entradasFixas.find(g => g.id === t.entradaFixaId) : null);
-        
+
         if (fixoOrigem && fixoOrigem.fim) {
             const [anoIni, mesIni] = fixoOrigem.inicio.split('-');
             const [anoFim, mesFim] = fixoOrigem.fim.split('-');
             const totalParcelas = (parseInt(anoFim) - parseInt(anoIni)) * 12 + (parseInt(mesFim) - parseInt(mesIni)) + 1;
-            
             const tMes = t.data.substring(0, 7);
             const [anoT, mesT] = tMes.split('-');
             const parcelaAtual = (parseInt(anoT) - parseInt(anoIni)) * 12 + (parseInt(mesT) - parseInt(mesIni)) + 1;
-            
             if (parcelaAtual > 0 && parcelaAtual <= totalParcelas) {
-                descFinal += ` (${parcelaAtual}/${totalParcelas})`;
+                parcelaInfo = `<span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:2px;">Parcela ${parcelaAtual}/${totalParcelas}</span>`;
             }
         }
 
@@ -929,7 +953,6 @@ function renderizarLista() {
         const corCat = catObj ? catObj.cor : 'transparent';
         const borderStyle = corCat !== 'transparent' ? `border-left: 4px solid ${corCat}; padding-left: 8px;` : '';
 
-        // NOVO: guardar dados brutos no dataset do li
         li.dataset.rawData = t.data;
         li.dataset.rawDesc = t.descricao;
         li.dataset.rawCat = t.categoria;
@@ -939,13 +962,17 @@ function renderizarLista() {
         li.dataset.rawStatus = tStatus;
 
         li.innerHTML = `
+            <span class="col-num">${index + 1}</span>
             <span data-label="Data" style="cursor:pointer" title="Clique para editar">${t.data.split('-').reverse().join('/')}</span>
-            <span data-label="Descrição" title="Clique para editar: ${descFinal}" style="cursor:pointer">${descFinal}</span>
+            <span data-label="Descrição" title="Clique para editar: ${descFinal}" style="cursor:pointer; display:flex; flex-direction:column; justify-content:center;">
+                ${descFinal}
+                ${parcelaInfo}
+            </span>
             <span data-label="Categoria" style="${borderStyle}; cursor:pointer" title="Clique para editar">${t.categoria}</span>
             <span data-label="Cartão" style="cursor:pointer" title="Clique para editar">${t.cartao || '-'}</span>
             <span data-label="Valor" class="${classeValor}" style="cursor:pointer" title="Clique para editar">${sinal} ${valorFormatado}</span>
-            <span data-label="Status" class="acoes-linha" style="cursor:pointer" title="Clique para editar">
-                ${labelStatus}
+            <span data-label="Status" style="cursor:pointer" title="Clique para editar">${labelStatus}</span>
+            <span class="col-acoes">
                 <button class="btn-excluir" title="Excluir"><i class="fa-solid fa-trash"></i></button>
             </span>
         `;
@@ -954,13 +981,17 @@ function renderizarLista() {
     atualizarResumo(transacoesFiltradas, navYYYYMM);
 }
 
-toggleSimulacao.addEventListener('change', renderizarLista);
+toggleSimulacao.addEventListener('change', () => { localStorage.setItem('verSimulacoes', toggleSimulacao.checked); renderizarLista(); });
 filtroCategoria.addEventListener('change', renderizarLista);
 filtroCartao.addEventListener('change', renderizarLista);
+filtroBusca.addEventListener('input', renderizarLista);
+filtroTipo.addEventListener('change', () => { atualizarFiltroCategorias(); renderizarLista(); });
+document.getElementById('btn-limpar-filtros').addEventListener('click', () => {
+    filtroBusca.value = ''; filtroTipo.value = ''; filtroCategoria.value = ''; filtroCartao.value = ''; filtroStatus.value = '';
+    atualizarFiltroCategorias(); renderizarLista();
+});
 filtroStatus.addEventListener('change', (e) => {
-    if (e.target.value === 'prevista' || e.target.value === 'simulacao') {
-        toggleSimulacao.checked = true;
-    }
+    if (e.target.value === 'prevista' || e.target.value === 'simulacao') toggleSimulacao.checked = true;
     renderizarLista();
 });
 
@@ -970,7 +1001,6 @@ listaTransacoes.addEventListener('click', async (e) => {
     const li = e.target.closest('li');
 
     if (!li) return;
-
     const idTransacao = li.getAttribute('data-id');
 
     if (btnExcluir) {
@@ -978,21 +1008,49 @@ listaTransacoes.addEventListener('click', async (e) => {
         const transacaoOriginal = transacoes.find(t => t.id === idTransacao);
         const isFixoSalvo = transacaoOriginal && (transacaoOriginal.entradaFixaId || transacaoOriginal.gastoFixoId);
 
-        const deletarComum = async () => await deleteDoc(doc(window.db, "transacoes", idTransacao));
+        // ATUALIZADO PARA ARRAYS
+        const deletarComum = async () => {
+            if(transacaoOriginal && transacaoOriginal.docId) {
+                const docRef = doc(window.db, "dados_mensais", transacaoOriginal.docId);
+                const docSnap = await getDoc(docRef);
+                if(docSnap.exists()) {
+                    let arr = docSnap.data().transacoes || [];
+                    arr = arr.filter(t => t.id !== idTransacao);
+                    await updateDoc(docRef, { transacoes: arr });
+                }
+            }
+        };
+
         const deletarFixoDesteMes = async () => {
+            const mesAcao = `${dataNavegacao.getFullYear()}-${String(dataNavegacao.getMonth() + 1).padStart(2, '0')}`;
+            const docId = `${userIdLogado}_${mesAcao}`;
             if (isProjecao) {
                 const isEntrada = idTransacao.startsWith('proje_');
-                const fixoId = idTransacao.split('_')[1]; 
+                const fixoId = idTransacao.split('_')[1];
+                const idExclusao = Date.now().toString(36) + Math.random().toString(36).substr(2);
                 const novosDados = {
-                    status: 'excluida', criadoEm: new Date(),
-                    data: `${dataNavegacao.getFullYear()}-${String(dataNavegacao.getMonth() + 1).padStart(2, '0')}-01`,
-                    valor: 0, descricao: 'Excluída'
+                    id: idExclusao, status: 'excluida', criadoEm: new Date().toISOString(),
+                    data: `${mesAcao}-01`, valor: 0, descricao: 'Excluída', userId: userIdLogado
                 };
                 if (isEntrada) novosDados.entradaFixaId = fixoId;
                 else novosDados.gastoFixoId = fixoId;
-                await addDoc(collection(window.db, "transacoes"), novosDados);
+
+                await setDoc(doc(window.db, "dados_mensais", docId), {
+                    userId: userIdLogado, mes: mesAcao, transacoes: arrayUnion(novosDados)
+                }, { merge: true });
             } else {
-                await updateDoc(doc(window.db, "transacoes", idTransacao), { status: 'excluida' });
+                if(transacaoOriginal && transacaoOriginal.docId) {
+                    const docRef = doc(window.db, "dados_mensais", transacaoOriginal.docId);
+                    const docSnap = await getDoc(docRef);
+                    if(docSnap.exists()) {
+                        let arr = docSnap.data().transacoes || [];
+                        const idx = arr.findIndex(x => x.id === idTransacao);
+                        if(idx !== -1) {
+                            arr[idx].status = 'excluida';
+                            await updateDoc(docRef, { transacoes: arr });
+                        }
+                    }
+                }
             }
         };
 
@@ -1001,22 +1059,18 @@ listaTransacoes.addEventListener('click', async (e) => {
             document.getElementById('aviso-edicao-titulo').innerText = 'Aviso de Exclusão';
             document.getElementById('aviso-edicao-texto').innerHTML = 'Você está excluindo uma ocorrência de um valor fixo. Esta modificação será aplicada <strong>apenas neste mês específico</strong>.<br><br>Para excluí-lo definitivamente de todos os meses, faça a exclusão através das Configurações (⚙️).';
             modalAviso.style.display = 'flex';
-            
             const btnConfirmar = document.getElementById('btn-confirmar-edicao-fixo');
             const btnCancelar = document.getElementById('btn-cancelar-edicao-fixo');
             const btnFechar = document.getElementById('fechar-modal-aviso');
-
             const limparModal = () => {
                 modalAviso.style.display = 'none';
                 btnConfirmar.replaceWith(btnConfirmar.cloneNode(true));
                 btnCancelar.replaceWith(btnCancelar.cloneNode(true));
                 btnFechar.replaceWith(btnFechar.cloneNode(true));
             };
-
             btnConfirmar.onclick = async () => { limparModal(); await deletarFixoDesteMes(); };
             btnCancelar.onclick = limparModal;
             btnFechar.onclick = limparModal;
-
         } else {
             confirmarAcao("Excluir Lançamento", "Tem certeza que deseja excluir esta transação?", deletarComum);
         }
@@ -1033,13 +1087,15 @@ listaTransacoes.addEventListener('click', async (e) => {
         const tStatus = li.dataset.rawStatus;
 
         li.classList.add('editando');
-        
-        const catOrdenadas = [...categorias].sort((a,b) => a.nome.localeCompare(b.nome));
+
+        const catOrdenadas = [...categorias].sort((a, b) => a.nome.localeCompare(b.nome));
         const catFiltradas = catOrdenadas.filter(c => !c.tipo || c.tipo === 'ambas' || c.tipo === tTipo);
         const optsCat = gerarOptionsSelect(catFiltradas, tCat);
         const optsCartoes = `<option value="">Nenhum</option>` + gerarOptionsSelect(cartoes, tCartao);
-        
+        const tNum = li.querySelector('.col-num') ? li.querySelector('.col-num').innerText : '';
+
         li.innerHTML = `
+            <span class="col-num">${tNum}</span>
             <input type="date" class="edit-data">
             <input type="text" class="edit-desc">
             <select class="edit-cat">${optsCat}</select>
@@ -1051,40 +1107,33 @@ listaTransacoes.addEventListener('click', async (e) => {
                 </select>
                 <input type="number" step="0.01" class="edit-valor">
             </div>
-            <div class="acoes-linha">
-                <select class="edit-status">
-                    <option value="realizada">Realizada</option>
-                    <option value="prevista">Previsto</option>
-                    <option value="simulacao">Simulação</option>
-                </select>
+            <select class="edit-status">
+                <option value="realizada">Realizada</option>
+                <option value="prevista">Previsto</option>
+                <option value="simulacao">Simulação</option>
+            </select>
+            <div class="col-acoes">
+                <button class="btn-excluir" title="Excluir"><i class="fa-solid fa-trash"></i></button>
             </div>
         `;
 
         li.querySelector('.edit-data').value = tData;
         li.querySelector('.edit-desc').value = tDesc;
-        
         const catSelect = li.querySelector('.edit-cat');
         if (tCat && !Array.from(catSelect.options).some(o => o.value === tCat)) {
-            const opt = document.createElement('option');
-            opt.value = tCat;
-            opt.text = tCat;
-            catSelect.add(opt);
+            const opt = document.createElement('option'); opt.value = tCat; opt.text = tCat; catSelect.add(opt);
         }
         catSelect.value = tCat || '';
-        
+
         const cartaoSelect = li.querySelector('.edit-cartao');
         if (tCartao && !Array.from(cartaoSelect.options).some(o => o.value === tCartao)) {
-            const opt = document.createElement('option');
-            opt.value = tCartao;
-            opt.text = tCartao;
-            cartaoSelect.add(opt);
+            const opt = document.createElement('option'); opt.value = tCartao; opt.text = tCartao; cartaoSelect.add(opt);
         }
         cartaoSelect.value = tCartao || '';
-        
+
         li.querySelector('.edit-tipo').value = tTipo;
         li.querySelector('.edit-valor').value = parseFloat(tValorRaw);
         li.querySelector('.edit-status').value = tStatus;
-        
         li.querySelector('.edit-tipo').dispatchEvent(new Event('change'));
 
         const clickedLabel = spanEditavel.getAttribute('data-label');
@@ -1106,46 +1155,73 @@ listaTransacoes.addEventListener('click', async (e) => {
                 cartao: li.querySelector('.edit-cartao').value,
                 tipo: li.querySelector('.edit-tipo').value,
                 valor: parseFloat(li.querySelector('.edit-valor').value),
-                status: li.querySelector('.edit-status').value 
+                status: li.querySelector('.edit-status').value
             };
 
-            const mudouQualquerCoisa = 
-                String(novosDados.descricao).trim() !== String(li.dataset.rawDesc).trim() ||
-                String(novosDados.categoria).trim() !== String(li.dataset.rawCat).trim() ||
-                String(novosDados.cartao).trim() !== String(li.dataset.rawCartao).trim() ||
-                parseFloat(novosDados.valor) !== parseFloat(li.dataset.rawValor) ||
-                String(novosDados.data).trim() !== String(li.dataset.rawData).trim() ||
-                String(novosDados.tipo).trim() !== String(li.dataset.rawTipo).trim() ||
-                String(novosDados.status).trim() !== String(li.dataset.rawStatus).trim();
+            const mudouQualquerCoisa = String(novosDados.descricao).trim() !== String(li.dataset.rawDesc).trim() || String(novosDados.categoria).trim() !== String(li.dataset.rawCat).trim() || String(novosDados.cartao).trim() !== String(li.dataset.rawCartao).trim() || parseFloat(novosDados.valor) !== parseFloat(li.dataset.rawValor) || String(novosDados.data).trim() !== String(li.dataset.rawData).trim() || String(novosDados.tipo).trim() !== String(li.dataset.rawTipo).trim() || String(novosDados.status).trim() !== String(li.dataset.rawStatus).trim();
 
             if (!mudouQualquerCoisa) {
-                renderizarLista();
-                return;
+                li.dataset.saving = 'false'; renderizarLista(); return;
             }
 
-            const mudouAlgoAlemDoStatus = 
-                String(novosDados.descricao).trim() !== String(li.dataset.rawDesc).trim() ||
-                String(novosDados.categoria).trim() !== String(li.dataset.rawCat).trim() ||
-                String(novosDados.cartao).trim() !== String(li.dataset.rawCartao).trim() ||
-                parseFloat(novosDados.valor) !== parseFloat(li.dataset.rawValor) ||
-                String(novosDados.data).trim() !== String(li.dataset.rawData).trim() ||
-                String(novosDados.tipo).trim() !== String(li.dataset.rawTipo).trim();
+            const mudouAlgoAlemDoStatus = String(novosDados.descricao).trim() !== String(li.dataset.rawDesc).trim() || String(novosDados.categoria).trim() !== String(li.dataset.rawCat).trim() || String(novosDados.cartao).trim() !== String(li.dataset.rawCartao).trim() || parseFloat(novosDados.valor) !== parseFloat(li.dataset.rawValor) || String(novosDados.data).trim() !== String(li.dataset.rawData).trim() || String(novosDados.tipo).trim() !== String(li.dataset.rawTipo).trim();
 
             const isProjecao = idTransacao.startsWith('proj');
             const transacaoOriginal = transacoes.find(t => t.id === idTransacao);
             const isFixoSalvo = transacaoOriginal && (transacaoOriginal.entradaFixaId || transacaoOriginal.gastoFixoId);
 
+            // ATUALIZADO PARA ARRAYS: Edição
             const executarSalvamento = async () => {
+                const novoId = isProjecao ? Date.now().toString(36) + Math.random().toString(36).substr(2) : idTransacao;
+                const tFinal = { id: novoId, ...novosDados };
+
                 if (isProjecao) {
                     const isEntrada = idTransacao.startsWith('proje_');
-                    const fixoId = idTransacao.split('_')[1]; 
-                    if (isEntrada) novosDados.entradaFixaId = fixoId;
-                    else novosDados.gastoFixoId = fixoId;
-                    
-                    novosDados.criadoEm = new Date();
-                    await addDoc(collection(window.db, "transacoes"), novosDados);
+                    const fixoId = idTransacao.split('_')[1];
+                    if (isEntrada) tFinal.entradaFixaId = fixoId;
+                    else tFinal.gastoFixoId = fixoId;
+                    tFinal.criadoEm = new Date().toISOString();
+                    tFinal.userId = userIdLogado;
+
+                    const mesTransacao = tFinal.data.substring(0, 7);
+                    const docId = `${userIdLogado}_${mesTransacao}`;
+                    await setDoc(doc(window.db, "dados_mensais", docId), {
+                        userId: userIdLogado, mes: mesTransacao, transacoes: arrayUnion(tFinal)
+                    }, { merge: true });
                 } else {
-                    await updateDoc(doc(window.db, "transacoes", idTransacao), novosDados);
+                    const oldMes = transacaoOriginal.data.substring(0, 7);
+                    const newMes = tFinal.data.substring(0, 7);
+                    
+                    if (oldMes === newMes) {
+                        const docRef = doc(window.db, "dados_mensais", transacaoOriginal.docId);
+                        const docSnap = await getDoc(docRef);
+                        if(docSnap.exists()) {
+                            let arr = docSnap.data().transacoes || [];
+                            const idx = arr.findIndex(x => x.id === idTransacao);
+                            if(idx !== -1) {
+                                arr[idx] = { ...arr[idx], ...novosDados };
+                                await updateDoc(docRef, { transacoes: arr });
+                            }
+                        }
+                    } else {
+                        // Se mudou de mês, tira do array antigo e bota no novo
+                        const oldDocRef = doc(window.db, "dados_mensais", transacaoOriginal.docId);
+                        const oldSnap = await getDoc(oldDocRef);
+                        let objToMove = null;
+                        if(oldSnap.exists()) {
+                            let arr = oldSnap.data().transacoes || [];
+                            objToMove = arr.find(x => x.id === idTransacao);
+                            arr = arr.filter(x => x.id !== idTransacao);
+                            await updateDoc(oldDocRef, { transacoes: arr });
+                        }
+                        if(objToMove) {
+                            const newDocId = `${userIdLogado}_${newMes}`;
+                            const tNova = { ...objToMove, ...novosDados };
+                            await setDoc(doc(window.db, "dados_mensais", newDocId), {
+                                userId: userIdLogado, mes: newMes, transacoes: arrayUnion(tNova)
+                            }, { merge: true });
+                        }
+                    }
                 }
             };
 
@@ -1154,7 +1230,7 @@ listaTransacoes.addEventListener('click', async (e) => {
                 document.getElementById('aviso-edicao-titulo').innerText = 'Aviso de Edição';
                 document.getElementById('aviso-edicao-texto').innerHTML = 'Você está alterando uma receita/despesa fixa na planilha. Esta modificação será aplicada <strong>apenas neste mês específico</strong>.<br><br>Para alterar para todos os meses futuros de forma definitiva, cancele esta ação e faça a alteração através das Configurações (⚙️).';
                 modalAviso.style.display = 'flex';
-                
+
                 const btnConfirmar = document.getElementById('btn-confirmar-edicao-fixo');
                 const btnCancelar = document.getElementById('btn-cancelar-edicao-fixo');
                 const btnFechar = document.getElementById('fechar-modal-aviso');
@@ -1167,21 +1243,22 @@ listaTransacoes.addEventListener('click', async (e) => {
                 };
 
                 document.getElementById('btn-confirmar-edicao-fixo').addEventListener('click', async () => {
-                    limparModal();
-                    await executarSalvamento();
+                    limparModal(); await executarSalvamento(); li.dataset.saving = 'false'; renderizarLista();
                 });
-
                 document.getElementById('btn-cancelar-edicao-fixo').addEventListener('click', () => {
-                    limparModal();
-                    renderizarLista();
+                    limparModal(); li.dataset.saving = 'false'; renderizarLista();
                 });
-
                 document.getElementById('fechar-modal-aviso').addEventListener('click', () => {
-                    limparModal();
-                    renderizarLista();
+                    limparModal(); li.dataset.saving = 'false'; renderizarLista();
                 });
             } else {
-                await executarSalvamento();
+                try {
+                    await executarSalvamento();
+                } catch (err) {
+                    console.error("Erro ao salvar:", err); alert("Erro ao salvar alterações.");
+                } finally {
+                    li.dataset.saving = 'false'; renderizarLista();
+                }
             }
         };
 
@@ -1192,35 +1269,42 @@ listaTransacoes.addEventListener('click', async (e) => {
                 }
             }, 10);
         });
-
         li.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                document.activeElement.blur(); // Triggers focusout which handles save
-            }
+            if (e.key === 'Enter') { e.preventDefault(); document.activeElement.blur(); }
         });
     }
 });
 
-// --- Inserção Rápida ---
+// --- Inserção Rápida (ATUALIZADO PARA ARRAYS) ---
 formInline.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+    if (!window.db || !userIdLogado) return;
+
+    const idTransacaoUnico = Date.now().toString(36) + Math.random().toString(36).substr(2);
+
     const novaTransacao = {
+        id: idTransacaoUnico,
         tipo: document.getElementById('in-tipo').value,
         descricao: document.getElementById('in-desc').value,
         valor: parseFloat(document.getElementById('in-valor').value),
         data: document.getElementById('in-data').value,
         categoria: document.getElementById('in-categoria').value,
         cartao: document.getElementById('in-cartao').value,
-        status: document.getElementById('in-status').value, 
-        criadoEm: new Date()
+        status: document.getElementById('in-status').value,
+        criadoEm: new Date().toISOString()
     };
 
+    const mesTransacao = novaTransacao.data.substring(0, 7);
+    const docId = `${userIdLogado}_${mesTransacao}`;
+
     try {
-        await addDoc(collection(window.db, "transacoes"), novaTransacao);
+        await setDoc(doc(window.db, "dados_mensais", docId), {
+            userId: userIdLogado,
+            mes: mesTransacao,
+            transacoes: arrayUnion(novaTransacao)
+        }, { merge: true });
+
         ultimaDataInserida = novaTransacao.data;
-        
         document.getElementById('in-desc').value = '';
         document.getElementById('in-valor').value = '';
         document.getElementById('in-data').value = ultimaDataInserida;
@@ -1230,55 +1314,63 @@ formInline.addEventListener('submit', async (e) => {
     }
 });
 
-// --- Firebase Sync ---
+// --- Firebase Sync com Filtros do Usuário (ATUALIZADO PARA ARRAYS) ---
 function inicializarSincronizacao() {
-    if(!window.db) return;
-    const q = query(collection(window.db, "transacoes"), orderBy("data", "desc"));
-    onSnapshot(q, (snapshot) => {
+    if (!window.db || !userIdLogado) return;
+    limparSincronizacao();
+
+    const qDadosMensais = query(collection(window.db, "dados_mensais"), where("userId", "==", userIdLogado));
+    listenersAtivos.push(onSnapshot(qDadosMensais, (snapshot) => {
         transacoes = [];
-        snapshot.forEach((doc) => transacoes.push({ id: doc.id, ...doc.data() }));
+        snapshot.forEach((docSnap) => {
+            const dados = docSnap.data();
+            if (dados.transacoes && Array.isArray(dados.transacoes)) {
+                // Injeta o ID do documento do mês para a gente saber de qual "gaveta" deletar depois
+                const transacoesDesteMes = dados.transacoes.map(t => ({...t, docId: docSnap.id}));
+                transacoes.push(...transacoesDesteMes);
+            }
+        });
         renderizarLista();
-    });
-    
-    onSnapshot(collection(window.db, "categorias"), (snapshot) => {
+    }, erro => console.error("Erro transacoes:", erro)));
+
+    const qCategorias = query(collection(window.db, "categorias"), where("userId", "==", userIdLogado));
+    listenersAtivos.push(onSnapshot(qCategorias, (snapshot) => {
         categorias = [];
         snapshot.forEach((doc) => categorias.push({ id: doc.id, ...doc.data() }));
         renderizarListaCategorias();
         carregarOpcoesFormulario();
         renderizarLista();
-    });
+    }));
 
-    onSnapshot(collection(window.db, "cartoes"), (snapshot) => {
+    const qCartoes = query(collection(window.db, "cartoes"), where("userId", "==", userIdLogado));
+    listenersAtivos.push(onSnapshot(qCartoes, (snapshot) => {
         cartoes = [];
         snapshot.forEach((doc) => cartoes.push({ id: doc.id, ...doc.data() }));
         renderizarListaCartoes();
         carregarOpcoesFormulario();
         renderizarLista();
-    });
+    }));
 
-    onSnapshot(collection(window.db, "entradasFixas"), (snapshot) => {
+    const qEntradas = query(collection(window.db, "entradasFixas"), where("userId", "==", userIdLogado));
+    listenersAtivos.push(onSnapshot(qEntradas, (snapshot) => {
         entradasFixas = [];
         snapshot.forEach((doc) => entradasFixas.push({ id: doc.id, ...doc.data() }));
         renderizarListaEntradasFixas();
         renderizarLista();
-    });
+    }));
 
-    onSnapshot(collection(window.db, "gastosFixos"), (snapshot) => {
+    const qSaidas = query(collection(window.db, "gastosFixos"), where("userId", "==", userIdLogado));
+    listenersAtivos.push(onSnapshot(qSaidas, (snapshot) => {
         saidasFixas = [];
         snapshot.forEach((doc) => saidasFixas.push({ id: doc.id, ...doc.data() }));
         renderizarListaSaidasFixas();
         renderizarLista();
-    });
+    }));
 }
 
 // --- Setup ---
 document.getElementById('in-data').value = ultimaDataInserida;
-atualizarCorTipo(); // Pinta o botão de +/-
+atualizarCorTipo();
 atualizarInterfaceMes();
 carregarOpcoesFormulario();
-renderizarListaCategorias();
-renderizarListaCartoes();
-renderizarListaEntradasFixas();
-renderizarListaSaidasFixas();
 
-setTimeout(() => { inicializarSincronizacao(); }, 1000);
