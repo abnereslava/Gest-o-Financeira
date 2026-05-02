@@ -143,13 +143,13 @@
                         <h3 title="Gastos no cartão neste mês a serem pagos no mês que vem">Cartão mês seguinte</h3>
                         <p id="total-cartao-mes">R$ 0,00</p>
                     </div>
+                    <div class="card saldo-efetivo-destaque">
+                        <h3 title="Apenas Operações Realizadas">Saldo Atual</h3>
+                        <p id="saldo-atual">R$ 0,00</p>
+                    </div>
                     <div class="card previsao">
                         <h3 title="Realizadas + Previstas (+ Simulações se ativado)">Saldo Projetado</h3>
                         <p id="saldo-previsto">R$ 0,00</p>
-                    </div>
-                    <div class="card saldo-efetivo-destaque">
-                        <h3 title="Apenas Operações Realizadas">Saldo Efetivo</h3>
-                        <p id="saldo-atual">R$ 0,00</p>
                     </div>
                 </section>
 
@@ -160,9 +160,11 @@
                             <input type="text" id="filtro-busca" placeholder="Pesquisar...">
                         </div>
                         <select id="filtro-tipo" class="filtro-select">
-                            <option value="">Tipo</option>
-                            <option value="entrada">Entradas</option>
-                            <option value="saida">Saídas</option>
+                            <option value="">Tudo</option>
+                            <option value="entrada">Todas as Entradas</option>
+                            <option value="saida">Todas as Saídas</option>
+                            <option value="entrada_fixa">Entradas Fixas</option>
+                            <option value="saida_fixa">Saídas Fixas</option>
                         </select>
                         <select id="filtro-categoria" class="filtro-select">
                             <option value="">Categoria</option>
@@ -333,8 +335,15 @@
             </div>
 
             <div id="tela-investimentos" class="tela">
-                <h2 style="margin-bottom: 1rem; color: var(--text-main);">Poupança, Reserva e Investimentos</h2>
-                <div id="investimentos-container"></div>
+                <div id="investimentos-header" style="margin-bottom: 2rem; background: var(--surface); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border);">
+                    <h3 style="margin-bottom: 1rem; color: var(--text-main); font-size: 0.9rem;">Adicionar Novo Investimento</h3>
+                    <form id="form-novo-investimento" style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 10px;">
+                        <input type="text" id="in-investimento-nome" placeholder="Nome do Investimento (Ex: Tesouro Selic...)" required style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-color); color: var(--text-main);">
+                        <input type="text" id="in-investimento-rendimento" placeholder="Rendimento (Ex: 120% CDI)" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-color); color: var(--text-main);">
+                        <button type="submit" class="btn-secondary" style="padding: 0 1.5rem; height: 45px;"><i class="fa-solid fa-plus"></i> Criar</button>
+                    </form>
+                </div>
+                <div id="investimentos-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem;"></div>
             </div>
 
             <div id="tela-beneficios" class="tela">
@@ -567,6 +576,56 @@
                 <button id="btn-confirmar-edicao-fixo" class="btn-primary w-100" style="margin-bottom: 0.5rem;">Entendi,
                     confirmar para este mês</button>
                 <button id="btn-cancelar-edicao-fixo" class="btn-secondary w-100">Cancelar</button>
+            </div>
+        </div>
+        <!-- Modal Vínculo Investimento -->
+        <div id="modal-vinculo-investimento" class="modal">
+            <div class="modal-content" style="max-width: 450px;">
+                <header class="modal-header">
+                    <h2 id="titulo-modal-vinculo">Vincular ao Investimento</h2>
+                    <span class="close-btn" id="fechar-modal-vinculo">&times;</span>
+                </header>
+                <div class="modal-body" style="padding: 1.5rem 0;">
+                    <p id="texto-modal-vinculo" style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.95rem;">
+                        Identificamos que este lançamento é de uma categoria de investimentos. Para onde deseja direcionar este valor?
+                    </p>
+                    <div id="lista-opcoes-investimento" style="display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto; padding-right: 5px;">
+                        <!-- Opções injetadas via JS -->
+                    </div>
+                    
+                    <div id="secao-novo-investimento-rapido" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); display: none;">
+                        <input type="text" id="in-novo-invest-rapido" placeholder="Nome do novo investimento..." style="width: 100%; padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-color); color: var(--text-main); margin-bottom: 10px;">
+                        <button id="btn-criar-vincular" class="btn-primary w-100">Criar e Vincular</button>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 1rem;">
+                    <button id="btn-pular-vinculo" class="btn-secondary w-100">Não somar em nenhum</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Edição Investimento -->
+        <div id="modal-edicao-investimento" class="modal">
+            <div class="modal-content" style="max-width: 450px;">
+                <header class="modal-header">
+                    <h2>Editar Investimento</h2>
+                    <span class="close-btn" id="fechar-modal-edicao-invest">&times;</span>
+                </header>
+                <form id="form-editar-investimento" style="padding: 1.5rem 0; display: flex; flex-direction: column; gap: 15px;">
+                    <input type="hidden" id="edit-invest-id">
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-size: 0.9rem; color: var(--text-muted);">Nome do Investimento</label>
+                        <input type="text" id="edit-invest-nome" required style="width: 100%; padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-color); color: var(--text-main);">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-size: 0.9rem; color: var(--text-muted);">Rendimento (Opcional)</label>
+                        <input type="text" id="edit-invest-rendimento" placeholder="Ex: 100% CDI" style="width: 100%; padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-color); color: var(--text-main);">
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button type="submit" class="btn-primary w-100">Salvar Alterações</button>
+                        <button type="button" id="btn-cancelar-edicao-invest" class="btn-secondary w-100">Cancelar</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div> <!-- Fim #app-content -->

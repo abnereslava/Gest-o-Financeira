@@ -271,15 +271,15 @@ body.light-mode .main-logo {
 .dashboard {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
-    gap: 1.2rem;
-    margin-bottom: 2.5rem;
+    gap: 0.8rem;
+    margin-bottom: 2rem;
 }
 
 .card {
     background: var(--surface);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    padding: 1.2rem;
+    padding: 1rem 0.8rem;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow);
     border: 1px solid var(--border);
@@ -328,7 +328,7 @@ body.light-mode .card.saldo-efetivo-destaque {
 }
 
 .card h3 {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     color: var(--text-muted);
     margin-bottom: 0.6rem;
     text-transform: uppercase;
@@ -339,7 +339,7 @@ body.light-mode .card.saldo-efetivo-destaque {
 }
 
 .card p {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     font-weight: 700;
     color: var(--text-main);
     white-space: nowrap;
@@ -359,7 +359,7 @@ body.light-mode .card.saldo-efetivo-destaque {
 
 .filtros-container {
     display: flex;
-    gap: 0.6rem; /* Reduzido de 0.8rem para caber tudo */
+    gap: 0.4rem;
     flex-wrap: wrap;
     align-items: center;
     width: 100%;
@@ -367,7 +367,7 @@ body.light-mode .card.saldo-efetivo-destaque {
 
 .busca-wrapper {
     position: relative;
-    min-width: 160px; /* Reduzido de 220px */
+    min-width: 120px;
     flex: 1;
 }
 
@@ -377,18 +377,18 @@ body.light-mode .card.saldo-efetivo-destaque {
     top: 50%;
     transform: translateY(-50%);
     color: var(--text-muted);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     pointer-events: none;
 }
 
 #filtro-busca {
     width: 100%;
-    padding: 0.6rem 1rem 0.6rem 2.2rem;
+    padding: 0.5rem 0.8rem 0.5rem 2rem;
     border: 1px solid var(--border);
     border-radius: 20px;
     background-color: var(--surface);
     color: var(--text-main);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     transition: 0.3s;
 }
 
@@ -399,12 +399,12 @@ body.light-mode .card.saldo-efetivo-destaque {
 }
 
 .filtro-select {
-    padding: 0.6rem 1rem;
+    padding: 0.5rem 0.7rem;
     border: 1px solid var(--border);
     border-radius: 20px;
     background-color: var(--surface);
     color: var(--text-main);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     transition: 0.3s;
     cursor: pointer;
 }
@@ -1367,6 +1367,43 @@ input:checked + .slider:before {
 }
 
 .cat-ranqueada-item:last-child { border-bottom: none; }
+
+/* --- Investimentos --- */
+.card-investimento {
+    position: relative;
+    overflow: hidden;
+}
+
+.badge-rendimento {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.card-investimento-acoes {
+    display: flex;
+    gap: 10px;
+}
+
+.card-investimento-acoes button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 5px;
+    border-radius: 50%;
+    transition: 0.2s;
+}
+
+.card-investimento-acoes .btn-edit { color: var(--accent); }
+.card-investimento-acoes .btn-delete { color: var(--danger); }
+
+.card-investimento-acoes button:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
 
 @media (max-width: 900px) {
     .ano-grid-layout { grid-template-columns: 1fr !important; }

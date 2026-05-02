@@ -12,6 +12,7 @@ onAuthStateChanged(window.auth, (user) => {
         document.getElementById('tela-login').style.display = 'none';
         document.getElementById('app-content').style.display = 'block';
         inicializarSincronizacao();
+        setTimeout(() => garantirCategoriasInvestimento(user.uid), 2000);
     } else {
         userIdLogado = null;
         document.getElementById('tela-login').style.display = 'flex';
@@ -193,11 +194,36 @@ tabBtns.forEach(btn => {
 });
 
 function atualizarCategoriasSelect() {
-    selectCategoria.innerHTML = '';
+    selectCategoria.innerHTML = '<option value="">Categoria...</option>';
     const tipoAtual = selectTipo.value;
     const catOrdenadas = [...categorias].sort((a, b) => a.nome.localeCompare(b.nome));
     const catFiltradas = catOrdenadas.filter(c => !c.tipo || c.tipo === 'ambas' || c.tipo === tipoAtual);
-    catFiltradas.forEach(cat => { selectCategoria.appendChild(new Option(cat.nome, cat.nome)); });
+    catFiltradas.forEach(cat => { selectCategoria.appendChild(new Option(formatarNomeCategoria(cat.nome), cat.nome)); });
+}
+
+async function garantirCategoriasInvestimento(uid) {
+    if (!window.db) return;
+    const nomesNecessarios = [
+        { nome: 'Resgate', tipo: 'entrada', cor: '#10b981' },
+        { nome: 'Poupança e investimentos', tipo: 'saida', cor: '#3b82f6' }
+    ];
+
+    for (const cat of nomesNecessarios) {
+        const existe = categorias.some(c => c.nome.toLowerCase().includes(cat.nome.toLowerCase()));
+        if (!existe) {
+            try {
+                await addDoc(collection(window.db, "categorias"), {
+                    nome: cat.nome,
+                    tipo: cat.tipo,
+                    cor: cat.cor,
+                    userId: uid
+                });
+                console.log(`Categoria ${cat.nome} criada automaticamente.`);
+            } catch (e) {
+                console.error("Erro ao criar categoria padrão:", e);
+            }
+        }
+    }
 }
 
 function atualizarFiltroCategorias() {
@@ -207,7 +233,7 @@ function atualizarFiltroCategorias() {
     filtroCategoria.innerHTML = '<option value="">Todas Categorias</option>';
     const catOrdenadas = [...categorias].sort((a, b) => a.nome.localeCompare(b.nome));
     catOrdenadas.filter(c => valTipo === '' || !c.tipo || c.tipo === 'ambas' || c.tipo === valTipo).forEach(cat => {
-        filtroCategoria.appendChild(new Option(cat.nome, cat.nome));
+        filtroCategoria.appendChild(new Option(formatarNomeCategoria(cat.nome), cat.nome));
     });
     if (Array.from(filtroCategoria.options).some(o => o.value === selectedCat)) filtroCategoria.value = selectedCat;
 }
@@ -216,11 +242,19 @@ function carregarOpcoesFormulario() {
     atualizarCategoriasSelect();
     selectCartao.innerHTML = '<option value="">Débito/pix/dinheiro</option>';
     atualizarFiltroCategorias();
-    filtroCartao.innerHTML = '<option value="">Todos Cartões</option>';
+    
+    // Novo Filtro de Cartões
+    filtroCartao.innerHTML = `
+        <option value="">Tudo</option>
+        <option value="debito_pix_dinheiro">Débito/pix/dinheiro</option>
+        <option value="todos_credito">Todos os cartões (crédito)</option>
+    `;
+    
     const cartoesOrdenados = [...cartoes].sort((a, b) => a.nome.localeCompare(b.nome));
     cartoesOrdenados.forEach(c => {
         selectCartao.appendChild(new Option(c.nome, c.nome));
-        filtroCartao.appendChild(new Option(c.nome, c.nome));
+        const label = `${c.nome} (${c.tipo === 'credito' ? 'Crédito' : 'Débito'})`;
+        filtroCartao.appendChild(new Option(label, c.nome));
     });
 
     const selectCatEntrada = document.getElementById('nova-entrada-fixa-cat');
@@ -265,7 +299,7 @@ function renderizarListaCategorias() { /* ... mantém igual ... */
         const htmlLi = `<li style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
             <div style="display: flex; align-items: center; gap: 10px;">
                 <div style="width: 15px; height: 15px; border-radius: 50%; background-color: ${cat.cor};"></div>
-                <span class="cat-nome-texto">${cat.nome}</span>${tipoBadge}
+                <span class="cat-nome-texto">${formatarNomeCategoria(cat.nome)}</span>${tipoBadge}
             </div>
             <div class="acoes-linha" style="margin-top: 0; padding-top: 0; border: none;">
                 <button class="btn-editar-categoria" data-id="${cat.id}" data-cor="${cat.cor}" data-tipo="${cat.tipo || 'ambas'}" title="Editar Categoria" style="color: var(--accent);"><i class="fa-solid fa-pen"></i></button>
@@ -721,15 +755,27 @@ function getMesCobranca(yyyy_mm) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
+const checkIsCredito = (nomeCartao) => {
+    if (!nomeCartao || nomeCartao === '') return false;
+    const cObj = cartoes.find(c => c.nome === nomeCartao);
+    return cObj && (cObj.tipo === 'credito' || !cObj.tipo);
+};
+
+const isCategoriaInvestimento = (nome) => {
+    if (!nome) return false;
+    const n = nome.toLowerCase();
+    return n.includes('poupança') || n.includes('investimento') || n.includes('resgate') || n.includes('rendimento') || n.includes('dividendo');
+};
+
+const formatarNomeCategoria = (nome) => {
+    if (!nome) return '';
+    return isCategoriaInvestimento(nome) ? nome + ' ◆' : nome;
+};
+
 function atualizarResumo(transacoesRenderizadas, mesNavString) {
     const mesAnteriorStr = getMesAnterior(mesNavString);
     let totalEntradasMes = 0; let totalSaidasVistaMes = 0; let totalUsoCartaoMes = 0; let totalFaturaAnterior = 0;
 
-    const checkIsCredito = (nomeCartao) => {
-        if (!nomeCartao || nomeCartao === '') return false;
-        const cObj = cartoes.find(c => c.nome === nomeCartao);
-        return cObj && (cObj.tipo === 'credito' || !cObj.tipo);
-    };
 
     transacoesRenderizadas.forEach(t => {
         if (t.status === 'excluida') return;
@@ -870,9 +916,20 @@ function renderizarLista() {
         const tStatus = normalizarStatus(t);
         const passaSimulacao = incluirSimulacoes ? true : tStatus !== 'simulacao';
         const passaMes = t.data.startsWith(prefixoData);
-        let passaTipo = valTipo === '' || t.tipo === valTipo;
+        
+        let passaTipo = true;
+        if (valTipo === 'entrada') passaTipo = t.tipo === 'entrada';
+        else if (valTipo === 'saida') passaTipo = t.tipo === 'saida';
+        else if (valTipo === 'entrada_fixa') passaTipo = !!t.entradaFixaId;
+        else if (valTipo === 'saida_fixa') passaTipo = !!t.gastoFixoId;
+
         let passaCat = valCat === '' || t.categoria === valCat;
-        let passaCartao = valCartao === '' || t.cartao === valCartao;
+        
+        let passaCartao = true;
+        if (valCartao === 'debito_pix_dinheiro') passaCartao = !t.cartao;
+        else if (valCartao === 'todos_credito') passaCartao = checkIsCredito(t.cartao);
+        else if (valCartao !== '') passaCartao = t.cartao === valCartao;
+
         let passaStatus = valStatus === '' || tStatus === valStatus;
         let passaBusca = valBusca === '' || t.descricao.toLowerCase().includes(valBusca);
 
@@ -965,11 +1022,19 @@ function renderizarLista() {
             <span class="col-num">${index + 1}</span>
             <span data-label="Data" style="cursor:pointer" title="Clique para editar">${t.data.split('-').reverse().join('/')}</span>
             <span data-label="Descrição" title="Clique para editar: ${descFinal}" style="cursor:pointer; display:flex; flex-direction:column; justify-content:center;">
-                ${descFinal}
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <span>${descFinal}</span>
+                    ${fixoOrigem ? '<i class="fa-solid fa-thumbtack" style="font-size: 0.7rem; color: var(--text-muted); transform: rotate(45deg);"></i>' : ''}
+                </div>
                 ${parcelaInfo}
             </span>
-            <span data-label="Categoria" style="${borderStyle}; cursor:pointer" title="Clique para editar">${t.categoria}</span>
-            <span data-label="Cartão" style="cursor:pointer" title="Clique para editar">${t.cartao || '-'}</span>
+            <span data-label="Categoria" style="${borderStyle}; cursor:pointer" title="Clique para editar">
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <span>${t.categoria}</span>
+                    ${isCategoriaInvestimento(t.categoria) ? '<i class="fa-solid fa-thumbtack" style="font-size: 0.7rem; color: var(--accent); transform: rotate(45deg);"></i>' : ''}
+                </div>
+            </span>
+            <span data-label="Cartão" style="cursor:pointer" title="Clique para editar">${(!t.cartao || t.cartao === 'nenhum' || t.cartao === '-') ? 'Débito/pix/dinheiro' : t.cartao}</span>
             <span data-label="Valor" class="${classeValor}" style="cursor:pointer" title="Clique para editar">${sinal} ${valorFormatado}</span>
             <span data-label="Status" style="cursor:pointer" title="Clique para editar">${labelStatus}</span>
             <span class="col-acoes">
@@ -1170,58 +1235,78 @@ listaTransacoes.addEventListener('click', async (e) => {
             const transacaoOriginal = transacoes.find(t => t.id === idTransacao);
             const isFixoSalvo = transacaoOriginal && (transacaoOriginal.entradaFixaId || transacaoOriginal.gastoFixoId);
 
-            // ATUALIZADO PARA ARRAYS: Edição
-            const executarSalvamento = async () => {
-                const novoId = isProjecao ? Date.now().toString(36) + Math.random().toString(36).substr(2) : idTransacao;
-                const tFinal = { id: novoId, ...novosDados };
-
-                if (isProjecao) {
-                    const isEntrada = idTransacao.startsWith('proje_');
-                    const fixoId = idTransacao.split('_')[1];
-                    if (isEntrada) tFinal.entradaFixaId = fixoId;
-                    else tFinal.gastoFixoId = fixoId;
-                    tFinal.criadoEm = new Date().toISOString();
-                    tFinal.userId = userIdLogado;
-
-                    const mesTransacao = tFinal.data.substring(0, 7);
-                    const docId = `${userIdLogado}_${mesTransacao}`;
-                    await setDoc(doc(window.db, "dados_mensais", docId), {
-                        userId: userIdLogado, mes: mesTransacao, transacoes: arrayUnion(tFinal)
-                    }, { merge: true });
-                } else {
-                    const oldMes = transacaoOriginal.data.substring(0, 7);
-                    const newMes = tFinal.data.substring(0, 7);
+            const executarSalvamentoComVinculo = async () => {
+                const catLower = novosDados.categoria.toLowerCase();
+                const catTriggerInvest = catLower.includes('poupança e investimentos') || catLower.includes('resgate');
+                
+                const finalizar = async (investId = null) => {
+                    const novoId = isProjecao ? Date.now().toString(36) + Math.random().toString(36).substr(2) : idTransacao;
+                    const tFinal = { id: novoId, ...novosDados };
                     
-                    if (oldMes === newMes) {
-                        const docRef = doc(window.db, "dados_mensais", transacaoOriginal.docId);
-                        const docSnap = await getDoc(docRef);
-                        if(docSnap.exists()) {
-                            let arr = docSnap.data().transacoes || [];
-                            const idx = arr.findIndex(x => x.id === idTransacao);
-                            if(idx !== -1) {
-                                arr[idx] = { ...arr[idx], ...novosDados };
-                                await updateDoc(docRef, { transacoes: arr });
-                            }
-                        }
-                    } else {
-                        // Se mudou de mês, tira do array antigo e bota no novo
-                        const oldDocRef = doc(window.db, "dados_mensais", transacaoOriginal.docId);
-                        const oldSnap = await getDoc(oldDocRef);
-                        let objToMove = null;
-                        if(oldSnap.exists()) {
-                            let arr = oldSnap.data().transacoes || [];
-                            objToMove = arr.find(x => x.id === idTransacao);
-                            arr = arr.filter(x => x.id !== idTransacao);
-                            await updateDoc(oldDocRef, { transacoes: arr });
-                        }
-                        if(objToMove) {
-                            const newDocId = `${userIdLogado}_${newMes}`;
-                            const tNova = { ...objToMove, ...novosDados };
-                            await setDoc(doc(window.db, "dados_mensais", newDocId), {
-                                userId: userIdLogado, mes: newMes, transacoes: arrayUnion(tNova)
-                            }, { merge: true });
+                    if (investId) {
+                        tFinal.investimentoId = investId;
+                        const sinal = tFinal.categoria.toLowerCase().includes('resgate') ? -1 : 1;
+                        if (window.atualizarSaldoInvestimento) {
+                            await window.atualizarSaldoInvestimento(investId, tFinal.valor * sinal);
                         }
                     }
+
+                    if (isProjecao) {
+                        const isEntrada = idTransacao.startsWith('proje_');
+                        const fixoId = idTransacao.split('_')[1];
+                        if (isEntrada) tFinal.entradaFixaId = fixoId;
+                        else tFinal.gastoFixoId = fixoId;
+                        tFinal.criadoEm = new Date().toISOString();
+                        tFinal.userId = userIdLogado;
+
+                        const mesTransacao = tFinal.data.substring(0, 7);
+                        const docId = `${userIdLogado}_${mesTransacao}`;
+                        await setDoc(doc(window.db, "dados_mensais", docId), {
+                            userId: userIdLogado, mes: mesTransacao, transacoes: arrayUnion(tFinal)
+                        }, { merge: true });
+                    } else {
+                        const oldMes = transacaoOriginal.data.substring(0, 7);
+                        const newMes = tFinal.data.substring(0, 7);
+                        
+                        if (oldMes === newMes) {
+                            const docRef = doc(window.db, "dados_mensais", transacaoOriginal.docId);
+                            const docSnap = await getDoc(docRef);
+                            if(docSnap.exists()) {
+                                let arr = docSnap.data().transacoes || [];
+                                const idx = arr.findIndex(x => x.id === idTransacao);
+                                if(idx !== -1) {
+                                    arr[idx] = { ...arr[idx], ...novosDados };
+                                    if (investId) arr[idx].investimentoId = investId;
+                                    await updateDoc(docRef, { transacoes: arr });
+                                }
+                            }
+                        } else {
+                            const oldDocRef = doc(window.db, "dados_mensais", transacaoOriginal.docId);
+                            const oldSnap = await getDoc(oldDocRef);
+                            let objToMove = null;
+                            if(oldSnap.exists()) {
+                                let arr = oldSnap.data().transacoes || [];
+                                objToMove = arr.find(x => x.id === idTransacao);
+                                arr = arr.filter(x => x.id !== idTransacao);
+                                await updateDoc(oldDocRef, { transacoes: arr });
+                            }
+                            if(objToMove) {
+                                const newDocId = `${userIdLogado}_${newMes}`;
+                                const tNova = { ...objToMove, ...novosDados };
+                                if (investId) tNova.investimentoId = investId;
+                                await setDoc(doc(window.db, "dados_mensais", newDocId), {
+                                    userId: userIdLogado, mes: newMes, transacoes: arrayUnion(tNova)
+                                }, { merge: true });
+                            }
+                        }
+                    }
+                    li.dataset.saving = 'false'; renderizarLista();
+                };
+
+                if (catTriggerInvest && !transacaoOriginal.investimentoId) {
+                    solicitarVinculoInvestimento(novosDados.categoria, finalizar);
+                } else {
+                    await finalizar();
                 }
             };
 
@@ -1243,7 +1328,7 @@ listaTransacoes.addEventListener('click', async (e) => {
                 };
 
                 document.getElementById('btn-confirmar-edicao-fixo').addEventListener('click', async () => {
-                    limparModal(); await executarSalvamento(); li.dataset.saving = 'false'; renderizarLista();
+                    limparModal(); await executarSalvamentoComVinculo();
                 });
                 document.getElementById('btn-cancelar-edicao-fixo').addEventListener('click', () => {
                     limparModal(); li.dataset.saving = 'false'; renderizarLista();
@@ -1253,10 +1338,9 @@ listaTransacoes.addEventListener('click', async (e) => {
                 });
             } else {
                 try {
-                    await executarSalvamento();
+                    await executarSalvamentoComVinculo();
                 } catch (err) {
                     console.error("Erro ao salvar:", err); alert("Erro ao salvar alterações.");
-                } finally {
                     li.dataset.saving = 'false'; renderizarLista();
                 }
             }
@@ -1278,39 +1362,56 @@ listaTransacoes.addEventListener('click', async (e) => {
 // --- Inserção Rápida (ATUALIZADO PARA ARRAYS) ---
 formInline.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!window.db || !userIdLogado) return;
+    if (!userIdLogado) return;
 
-    const idTransacaoUnico = Date.now().toString(36) + Math.random().toString(36).substr(2);
+    const dataValue = document.getElementById('in-data').value;
+    const descValue = document.getElementById('in-desc').value;
+    const valorValue = parseFloat(document.getElementById('in-valor').value);
+    const catValue = document.getElementById('in-categoria').value;
+    const tipoValue = document.getElementById('in-tipo').value;
+    const cartaoValue = document.getElementById('in-cartao').value;
 
-    const novaTransacao = {
-        id: idTransacaoUnico,
-        tipo: document.getElementById('in-tipo').value,
-        descricao: document.getElementById('in-desc').value,
-        valor: parseFloat(document.getElementById('in-valor').value),
-        data: document.getElementById('in-data').value,
-        categoria: document.getElementById('in-categoria').value,
-        cartao: document.getElementById('in-cartao').value,
-        status: document.getElementById('in-status').value,
-        criadoEm: new Date().toISOString()
+    const tFinal = {
+        id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+        data: dataValue,
+        descricao: descValue,
+        valor: valorValue,
+        categoria: catValue,
+        tipo: tipoValue,
+        cartao: cartaoValue,
+        status: 'pendente',
+        criadoEm: new Date().toISOString(),
+        userId: userIdLogado
     };
 
-    const mesTransacao = novaTransacao.data.substring(0, 7);
-    const docId = `${userIdLogado}_${mesTransacao}`;
+    const catLower = catValue.toLowerCase();
+    const catTriggerInvest = catLower.includes('poupança e investimentos') || catLower.includes('resgate');
 
-    try {
+    const salvarTransacao = async (investId = null) => {
+        if (investId) {
+            tFinal.investimentoId = investId;
+            const sinal = catLower.includes('resgate') ? -1 : 1;
+            if (window.atualizarSaldoInvestimento) {
+                await window.atualizarSaldoInvestimento(investId, tFinal.valor * sinal);
+            }
+        }
+
+        const mesTransacao = tFinal.data.substring(0, 7);
+        const docId = `${userIdLogado}_${mesTransacao}`;
         await setDoc(doc(window.db, "dados_mensais", docId), {
-            userId: userIdLogado,
-            mes: mesTransacao,
-            transacoes: arrayUnion(novaTransacao)
+            userId: userIdLogado, mes: mesTransacao, transacoes: arrayUnion(tFinal)
         }, { merge: true });
 
-        ultimaDataInserida = novaTransacao.data;
-        document.getElementById('in-desc').value = '';
-        document.getElementById('in-valor').value = '';
-        document.getElementById('in-data').value = ultimaDataInserida;
-        document.getElementById('in-desc').focus();
-    } catch (error) {
-        console.error("Erro ao salvar:", error);
+        formInline.reset();
+        if (typeof configurarDataPadrao === 'function') configurarDataPadrao();
+        else document.getElementById('in-data').value = new Date().toISOString().split('T')[0];
+        renderizarLista();
+    };
+
+    if (catTriggerInvest) {
+        solicitarVinculoInvestimento(catValue, salvarTransacao);
+    } else {
+        await salvarTransacao();
     }
 });
 
@@ -1364,8 +1465,94 @@ function inicializarSincronizacao() {
         saidasFixas = [];
         snapshot.forEach((doc) => saidasFixas.push({ id: doc.id, ...doc.data() }));
         renderizarListaSaidasFixas();
-        renderizarLista();
     }));
+}
+
+// --- Lógica de Vínculo com Investimentos ---
+let listaInvestimentosLocal = [];
+window.addEventListener('investimentosAtualizados', (e) => {
+    listaInvestimentosLocal = e.detail;
+});
+
+function solicitarVinculoInvestimento(categoria, callback) {
+    const modal = document.getElementById('modal-vinculo-investimento');
+    const listaUI = document.getElementById('lista-opcoes-investimento');
+    const titulo = document.getElementById('titulo-modal-vinculo');
+    const texto = document.getElementById('texto-modal-vinculo');
+    const secaoNovo = document.getElementById('secao-novo-investimento-rapido');
+    const inputNovo = document.getElementById('in-novo-invest-rapido');
+
+    const catLower = categoria.toLowerCase();
+    titulo.innerText = catLower.includes('resgate') ? 'Resgatar de qual investimento?' : 'Direcionar para qual investimento?';
+    texto.innerText = catLower.includes('resgate') 
+        ? 'Selecione o investimento de onde este valor está sendo retirado.' 
+        : 'Selecione o investimento para onde este valor está sendo enviado.';
+
+    const renderizarOpcoes = () => {
+        listaUI.innerHTML = listaInvestimentosLocal.map(inv => `
+            <button class="btn-vinculo-item" data-id="${inv.id}" style="width: 100%; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.2s;">
+                <div style="display: flex; flex-direction: column;">
+                    <span style="font-weight: 600;">${inv.nome}</span>
+                    ${inv.rendimento ? `<span style="font-size: 0.7rem; color: var(--accent); margin-top: 2px;">${inv.rendimento}</span>` : ''}
+                </div>
+                <span style="font-size: 0.8rem; color: var(--text-muted);">Saldo: R$ ${inv.saldo ? inv.saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '0,00'}</span>
+            </button>
+        `).join('');
+        
+        listaUI.innerHTML += `
+            <button id="btn-abrir-novo-rapido" style="width: 100%; padding: 1rem; background: none; border: 1px dashed var(--border); border-radius: 8px; color: var(--accent); cursor: pointer; transition: 0.2s; margin-top: 10px;">
+                <i class="fa-solid fa-plus"></i> Criar Novo Investimento
+            </button>
+        `;
+    };
+
+    renderizarOpcoes();
+    modal.style.display = 'flex';
+    secaoNovo.style.display = 'none';
+
+    const fechar = () => {
+        modal.style.display = 'none';
+        const newModal = modal.cloneNode(true);
+        modal.parentNode.replaceChild(newModal, modal);
+    };
+
+    document.getElementById('modal-vinculo-investimento').addEventListener('click', async (e) => {
+        const btnItem = e.target.closest('.btn-vinculo-item');
+        const btnAbrirNovo = e.target.closest('#btn-abrir-novo-rapido');
+        const btnPularLocal = e.target.closest('#btn-pular-vinculo');
+        const btnFecharLocal = e.target.closest('#fechar-modal-vinculo');
+        const btnCriarLocal = e.target.closest('#btn-criar-vincular');
+
+        if (btnItem) {
+            const id = btnItem.getAttribute('data-id');
+            fechar();
+            callback(id);
+        } else if (btnAbrirNovo) {
+            secaoNovo.style.display = 'block';
+            inputNovo.focus();
+        } else if (btnPularLocal) {
+            fechar();
+            callback(null);
+        } else if (btnFecharLocal) {
+            fechar();
+            callback(null);
+        } else if (btnCriarLocal) {
+            const nome = inputNovo.value.trim();
+            if (!nome) return;
+            try {
+                const docRef = await addDoc(collection(window.db, "investimentos"), {
+                    nome: nome,
+                    saldo: 0,
+                    userId: userIdLogado,
+                    createdAt: new Date().toISOString()
+                });
+                fechar();
+                callback(docRef.id);
+            } catch (error) {
+                console.error("Erro ao criar investimento rápido:", error);
+            }
+        }
+    });
 }
 
 // --- Setup ---

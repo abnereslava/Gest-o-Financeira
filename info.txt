@@ -1,5 +1,18 @@
-• Terminar aba "ano" - mas só após fazer a parte dos cartões de benefício, para garantir que esses dados sejam contemplados ali também
-• Criar aba de gráficos
-• Criar aba poupança, reserva e investimentos // com aquele lance do saldo de aporte
-• Criar aba de cartões benefício
-• Criar tela de login/senha
+[GERAL]
+    • Criar aba de gráficos
+    • Criar aba poupança, reserva e investimentos // com aquele lance do saldo de aporte
+    • Criar aba de cartões benefício
+
+[ABA "VISUALIZAÇÃO ANUAL"]
+    também
+
+[ABA "INVESTIMENTOS"]
+    • Atualizar informações de investimento para que acompanhem a previsão de acordo com o mês
+    • Verificar se é possível puxar de alguma database (e inserir isso na aba "investimentos") a informação de tipos de investimentos (como CDB, CDI) e quanto isso significa em valores reais na prática
+    • Verificar se está sendo possível criar "entradas e saídas" fixas relacionadas a investimentos
+
+
+• ARRUMAR ICONES NA DESCRIÇÃO DAS CATEGORIAS FIXAS (AQUELAS QUE FAZEM LIGAÇÃO COM A ABA IVNESTIMENTOS)
+
+[login]
+arrumar tela
