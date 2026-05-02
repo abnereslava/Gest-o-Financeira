@@ -17,3 +17,5 @@
 
 [login]
 arrumar tela
+
+• Verificar como estão funcionando (e se estão funcionando devidamente) as simulações
