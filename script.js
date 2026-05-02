@@ -987,8 +987,11 @@ function renderizarLista() {
 
         let labelStatus = '';
         if (tStatus === 'realizada') labelStatus = `<span class="badge realizada">Realizada</span>`;
-        if (tStatus === 'prevista') labelStatus = `<span class="badge prevista">Previsto</span>`;
-        if (tStatus === 'simulacao') labelStatus = `<span class="badge simulacao">Simulação</span>`;
+        else if (tStatus === 'prevista') labelStatus = `<span class="badge prevista">Previsto</span>`;
+        else if (tStatus === 'simulacao') labelStatus = `<span class="badge simulacao">Simulação</span>`;
+        else if (tStatus) {
+            labelStatus = `<span class="badge">${tStatus.charAt(0).toUpperCase() + tStatus.slice(1)}</span>`;
+        }
 
         let descFinal = t.descricao;
         let parcelaInfo = "";
@@ -1370,6 +1373,7 @@ formInline.addEventListener('submit', async (e) => {
     const catValue = document.getElementById('in-categoria').value;
     const tipoValue = document.getElementById('in-tipo').value;
     const cartaoValue = document.getElementById('in-cartao').value;
+    const statusValue = document.getElementById('in-status').value;
 
     const tFinal = {
         id: Date.now().toString(36) + Math.random().toString(36).substr(2),
@@ -1379,7 +1383,7 @@ formInline.addEventListener('submit', async (e) => {
         categoria: catValue,
         tipo: tipoValue,
         cartao: cartaoValue,
-        status: 'pendente',
+        status: statusValue,
         criadoEm: new Date().toISOString(),
         userId: userIdLogado
     };

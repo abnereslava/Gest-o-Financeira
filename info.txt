@@ -10,6 +10,7 @@
     • Atualizar informações de investimento para que acompanhem a previsão de acordo com o mês
     • Verificar se é possível puxar de alguma database (e inserir isso na aba "investimentos") a informação de tipos de investimentos (como CDB, CDI) e quanto isso significa em valores reais na prática
     • Verificar se está sendo possível criar "entradas e saídas" fixas relacionadas a investimentos
+    • Verificar o que acontece com os valores que já foram lançados dentro de uma caixinha de investimentos e arrumar
 
 
 • ARRUMAR ICONES NA DESCRIÇÃO DAS CATEGORIAS FIXAS (AQUELAS QUE FAZEM LIGAÇÃO COM A ABA IVNESTIMENTOS)
