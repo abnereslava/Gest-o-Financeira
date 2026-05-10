@@ -76,6 +76,20 @@ let transacoes = [];
 let ultimaDataInserida = new Date().toISOString().split('T')[0];
 let dataNavegacao = new Date();
 const nomesMeses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const coresMeses = [
+    '#7dd3fc', // Jan - Azul claro
+    '#f9a8d4', // Fev - Rosa
+    '#86efac', // Mar - Verde
+    '#fdba74', // Abr - Laranja
+    '#d8b4fe', // Mai - Roxo
+    '#67e8f9', // Jun - Ciano
+    '#fca5a5', // Jul - Vermelho suave
+    '#fde047', // Ago - Amarelo
+    '#5eead4', // Set - Teal
+    '#a5b4fc', // Out - Índigo
+    '#fda4af', // Nov - Rosa Rose
+    '#fcd34d'  // Dez - Âmbar
+];
 
 let categorias = [];
 let cartoes = [];
@@ -204,9 +218,17 @@ function atualizarCorTipo() {
 if (selectTipo) selectTipo.addEventListener('change', atualizarCorTipo);
 
 function atualizarInterfaceMes() {
-    labelMesAtual.innerText = `${nomesMeses[dataNavegacao.getMonth()]} ${dataNavegacao.getFullYear()}`;
-    const mesFormatado = String(dataNavegacao.getMonth() + 1).padStart(2, '0');
+    const mesIdx = dataNavegacao.getMonth();
+    labelMesAtual.innerText = `${nomesMeses[mesIdx]} ${dataNavegacao.getFullYear()}`;
+    const mesFormatado = String(mesIdx + 1).padStart(2, '0');
     if (inputMesPicker) inputMesPicker.value = `${dataNavegacao.getFullYear()}-${mesFormatado}`;
+    
+    const indicatorLine = document.getElementById('mes-indicator-line');
+    if (indicatorLine) {
+        indicatorLine.style.background = coresMeses[mesIdx];
+        indicatorLine.style.boxShadow = `0 2px 10px ${coresMeses[mesIdx]}44`; // 44 is approx 25% opacity
+    }
+    
     atualizarBackgroundPorMes();
     renderizarLista();
 }
