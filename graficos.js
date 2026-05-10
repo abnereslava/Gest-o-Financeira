@@ -41,13 +41,14 @@ function atualizarNavegacaoAno() {
     carregarDadosDoAno();
 }
 
-btnAnoAnterior.addEventListener('click', () => { anoVisualizado--; atualizarNavegacaoAno(); });
-btnAnoProximo.addEventListener('click', () => { anoVisualizado++; atualizarNavegacaoAno(); });
+if (btnAnoAnterior) btnAnoAnterior.addEventListener('click', () => { anoVisualizado--; atualizarNavegacaoAno(); });
+if (btnAnoProximo) btnAnoProximo.addEventListener('click', () => { anoVisualizado++; atualizarNavegacaoAno(); });
 
 // Monitorar clique na aba Anual para carregar dados sob demanda (Economiza Leituras)
 document.querySelectorAll('.main-tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
-        if (e.target.getAttribute('data-target') === 'tela-ano') {
+        const target = e.currentTarget.getAttribute('data-target');
+        if (target === 'tela-ano') {
             if (userIdLogadoAno) carregarDadosDoAno();
         }
     });

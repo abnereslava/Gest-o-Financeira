@@ -39,7 +39,7 @@ const checkAuth = setInterval(() => {
 // Carregar sob demanda
 document.querySelectorAll('.main-tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
-        if (e.target.getAttribute('data-target') === 'tela-investimentos') {
+        if (e.currentTarget.getAttribute('data-target') === 'tela-investimentos') {
             if (userIdLogadoInv && !dadosCarregados) {
                 carregarInvestimentos();
             }
@@ -73,10 +73,10 @@ function renderizarInvestimentos() {
     }
 
     container.innerHTML = investimentos.map(inv => `
-        <div class="card-investimento" style="background: var(--surface); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); position: relative; transition: 0.3s; display: flex; flex-direction: column; justify-content: space-between; min-height: 180px;">
+        <div class="card-investimento" style="background: var(--surface); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); position: relative; transition: 0.3s; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px;">
             <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <div>
-                    <h3 style="color: var(--text-main); font-size: 1.1rem; font-weight: 600; margin-bottom: 5px;">${inv.nome}</h3>
+                <div style="flex: 1; min-width: 0; margin-right: 10px;">
+                    <h3 style="color: var(--text-main); font-size: 1.1rem; font-weight: 600; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${inv.nome}">${inv.nome}</h3>
                     ${inv.rendimento ? `<span class="badge-rendimento">${inv.rendimento}</span>` : ''}
                 </div>
                 <div class="card-investimento-acoes">

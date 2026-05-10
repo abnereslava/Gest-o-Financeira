@@ -1,7 +1,7 @@
 import { collection, addDoc, onSnapshot, query, where, doc, deleteDoc, updateDoc, getDocs, setDoc, getDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
 
-// --- Autenticação e Estado do Usuário ---
+// --- Auth ---
 let userIdLogado = null;
 let listenersAtivos = [];
 const provider = new GoogleAuthProvider();
@@ -25,9 +25,7 @@ document.getElementById('btn-login-google').addEventListener('click', () => {
     signInWithPopup(window.auth, provider).catch(error => console.error("Erro no login:", error));
 });
 
-document.getElementById('btn-logout').addEventListener('click', () => {
-    signOut(window.auth);
-});
+document.getElementById('btn-logout').addEventListener('click', () => { signOut(window.auth); });
 
 function limparSincronizacao() {
     listenersAtivos.forEach(unsub => unsub());
@@ -40,7 +38,7 @@ function limparSincronizacao() {
     renderizarListaSaidasFixas();
 }
 
-// --- Seletores DOM ---
+// --- DOM Selectors ---
 const btnConfig = document.getElementById('btn-config');
 const btnThemeToggle = document.getElementById('btn-theme-toggle');
 const modalConfiguracoes = document.getElementById('modal-configuracoes');
@@ -61,9 +59,8 @@ const selectCartao = document.getElementById('in-cartao');
 const selectTipo = document.getElementById('in-tipo');
 
 const formCategoria = document.getElementById('form-categoria');
-const listaCategoriasUI = document.getElementById('lista-categorias');
-const formCartao = document.getElementById('form-cartao');
 const listaCartoesUI = document.getElementById('lista-cartoes');
+const formCartao = document.getElementById('form-cartao');
 const formEntradasFixas = document.getElementById('form-entradas-fixas');
 const listaEntradasFixasUI = document.getElementById('lista-entradas-fixas');
 const formSaidasFixas = document.getElementById('form-saidas-fixas');
@@ -74,11 +71,11 @@ const btnMesProximo = document.getElementById('btn-mes-proximo');
 const labelMesAtual = document.getElementById('mes-atual-label');
 const inputMesPicker = document.getElementById('input-mes-picker');
 
-// --- Estado ---
+// --- State ---
 let transacoes = [];
 let ultimaDataInserida = new Date().toISOString().split('T')[0];
 let dataNavegacao = new Date();
-const nomesMeses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const nomesMeses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
 let categorias = [];
 let cartoes = [];
@@ -86,18 +83,48 @@ let entradasFixas = [];
 let saidasFixas = [];
 let listSortConfig = [{ col: 'data', dir: 'desc' }];
 
+// --- Main Tab Switching ---
+document.querySelectorAll('.main-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.main-tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tela').forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
+        const target = document.getElementById(btn.dataset.target);
+        if (target) target.classList.add('active');
+
+        if (btn.dataset.target === 'tela-ano') {
+            if (typeof carregarDadosDoAno === 'function' && typeof userIdLogadoAno !== 'undefined' && userIdLogadoAno) {
+                carregarDadosDoAno();
+            }
+        }
+    });
+});
+
+// --- Card Expand Toggle ---
+window.toggleCard = function(cardId) {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+    card.classList.toggle('expanded');
+};
+
+
+// --- configurarDataPadrao ---
+function configurarDataPadrao() {
+    const d = document.getElementById('in-data');
+    if (d) d.value = new Date().toISOString().split('T')[0];
+    const md = document.getElementById('modal-data');
+    if (md) md.value = new Date().toISOString().split('T')[0];
+}
+
+// --- Sort header ---
 document.querySelectorAll('#lista-header .sortable').forEach(span => {
     span.addEventListener('click', () => {
         const col = span.getAttribute('data-sort');
         const existingIndex = listSortConfig.findIndex(s => s.col === col);
-
         if (existingIndex === 0) {
             const defaultDir = (col === 'data' || col === 'valor') ? 'desc' : 'asc';
-            if (listSortConfig[0].dir === defaultDir) {
-                listSortConfig[0].dir = defaultDir === 'asc' ? 'desc' : 'asc';
-            } else {
-                listSortConfig.shift(); 
-            }
+            if (listSortConfig[0].dir === defaultDir) listSortConfig[0].dir = defaultDir === 'asc' ? 'desc' : 'asc';
+            else listSortConfig.shift();
         } else {
             if (existingIndex > 0) listSortConfig.splice(existingIndex, 1);
             const defaultDir = (col === 'data' || col === 'valor') ? 'desc' : 'asc';
@@ -107,8 +134,9 @@ document.querySelectorAll('#lista-header .sortable').forEach(span => {
     });
 });
 
-// --- Funções Auxiliares e UI ---
+// --- Helpers ---
 function normalizarStatus(t) {
+    if (t.status === 'simulacao' || t.status === 'simulação') return 'simulacao';
     if (t.status) return t.status;
     if (t.simulacao) return 'simulacao';
     if (t.pago) return 'realizada';
@@ -122,21 +150,37 @@ function formatarMoeda(valor) {
 function atualizarBackgroundPorMes() {
     const mesIdx = dataNavegacao.getMonth();
     const cycleIdx = (mesIdx % 3) + 1;
-    document.body.classList.remove('bg-mes-1', 'bg-mes-2', 'bg-mes-3');
+    document.body.classList.remove('bg-mes-1','bg-mes-2','bg-mes-3');
     document.body.classList.add(`bg-mes-${cycleIdx}`);
 }
 
 function toggleTheme() {
     if (!btnThemeToggle) return;
-    const isLight = document.body.classList.toggle('light-mode');
-    localStorage.setItem('theme', isLight ? 'light' : 'dark');
-    btnThemeToggle.innerHTML = isLight ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+    const isLight = document.documentElement.toggleAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', isLight ? '' : 'light');
+    const nowLight = document.documentElement.getAttribute('data-theme') === 'light';
+    if (nowLight) {
+        document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+    // simple toggle
+    const current = document.documentElement.getAttribute('data-theme');
+    localStorage.setItem('theme', current || 'dark');
+    btnThemeToggle.innerHTML = (current === 'light') ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
 }
 
-if (btnThemeToggle) btnThemeToggle.addEventListener('click', toggleTheme);
+// Theme toggle with proper class approach
+btnThemeToggle.addEventListener('click', () => {
+    const isLight = document.body.classList.toggle('light-mode');
+    document.documentElement.setAttribute('data-theme', isLight ? 'light' : '');
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    btnThemeToggle.innerHTML = isLight ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+});
 
 if (localStorage.getItem('theme') === 'light') {
     document.body.classList.add('light-mode');
+    document.documentElement.setAttribute('data-theme', 'light');
     if (btnThemeToggle) btnThemeToggle.innerHTML = '<i class="fa-solid fa-sun"></i>';
 }
 
@@ -147,6 +191,7 @@ if (localStorage.getItem('verSimulacoes') === 'true') {
 }
 
 function atualizarCorTipo() {
+    if (!selectTipo) return;
     if (selectTipo.value === 'entrada') {
         selectTipo.style.color = 'var(--success)';
         selectTipo.style.borderColor = 'var(--success)';
@@ -156,7 +201,7 @@ function atualizarCorTipo() {
     }
     if (typeof atualizarCategoriasSelect === 'function') atualizarCategoriasSelect();
 }
-selectTipo.addEventListener('change', atualizarCorTipo);
+if (selectTipo) selectTipo.addEventListener('change', atualizarCorTipo);
 
 function atualizarInterfaceMes() {
     labelMesAtual.innerText = `${nomesMeses[dataNavegacao.getMonth()]} ${dataNavegacao.getFullYear()}`;
@@ -180,8 +225,12 @@ if (inputMesPicker) {
     });
 }
 
+labelMesAtual.addEventListener('click', () => {
+    if (inputMesPicker) { inputMesPicker.style.pointerEvents = 'auto'; inputMesPicker.showPicker?.(); inputMesPicker.click(); }
+});
+
 btnConfig.addEventListener('click', () => modalConfiguracoes.style.display = 'flex');
-closeBtns.forEach(btn => btn.addEventListener('click', (e) => e.target.closest('.modal').style.display = 'none'));
+closeBtns.forEach(btn => btn.addEventListener('click', (e) => { const m = e.target.closest('.modal'); if (m) m.style.display = 'none'; }));
 window.addEventListener('click', (e) => { if (e.target.classList.contains('modal')) e.target.style.display = 'none'; });
 
 tabBtns.forEach(btn => {
@@ -207,21 +256,12 @@ async function garantirCategoriasInvestimento(uid) {
         { nome: 'Resgate', tipo: 'entrada', cor: '#10b981' },
         { nome: 'Poupança e investimentos', tipo: 'saida', cor: '#3b82f6' }
     ];
-
     for (const cat of nomesNecessarios) {
         const existe = categorias.some(c => c.nome.toLowerCase().includes(cat.nome.toLowerCase()));
         if (!existe) {
             try {
-                await addDoc(collection(window.db, "categorias"), {
-                    nome: cat.nome,
-                    tipo: cat.tipo,
-                    cor: cat.cor,
-                    userId: uid
-                });
-                console.log(`Categoria ${cat.nome} criada automaticamente.`);
-            } catch (e) {
-                console.error("Erro ao criar categoria padrão:", e);
-            }
+                await addDoc(collection(window.db, "categorias"), { nome: cat.nome, tipo: cat.tipo, cor: cat.cor, userId: uid });
+            } catch (e) { console.error("Erro ao criar categoria padrão:", e); }
         }
     }
 }
@@ -242,19 +282,17 @@ function carregarOpcoesFormulario() {
     atualizarCategoriasSelect();
     selectCartao.innerHTML = '<option value="">Débito/pix/dinheiro</option>';
     atualizarFiltroCategorias();
-    
-    // Novo Filtro de Cartões
+
     filtroCartao.innerHTML = `
         <option value="">Tudo</option>
         <option value="debito_pix_dinheiro">Débito/pix/dinheiro</option>
         <option value="todos_credito">Todos os cartões (crédito)</option>
     `;
-    
+
     const cartoesOrdenados = [...cartoes].sort((a, b) => a.nome.localeCompare(b.nome));
     cartoesOrdenados.forEach(c => {
         selectCartao.appendChild(new Option(c.nome, c.nome));
-        const label = `${c.nome} (${c.tipo === 'credito' ? 'Crédito' : 'Débito'})`;
-        filtroCartao.appendChild(new Option(label, c.nome));
+        filtroCartao.appendChild(new Option(`${c.nome} (${c.tipo === 'credito' ? 'Crédito' : 'Débito'})`, c.nome));
     });
 
     const selectCatEntrada = document.getElementById('nova-entrada-fixa-cat');
@@ -271,6 +309,32 @@ function carregarOpcoesFormulario() {
         catOrdenadas.filter(c => !c.tipo || c.tipo === 'ambas' || c.tipo === 'saida').forEach(c => selectCatSaida.appendChild(new Option(c.nome, c.nome)));
     }
     selectsCartao.forEach(sel => { if (sel) { sel.innerHTML = '<option value="">Débito/pix/dinheiro</option>'; cartoesOrdenados.forEach(c => sel.appendChild(new Option(c.nome, c.nome))); } });
+
+    // Populate modal selects
+    popularModalSelects();
+}
+
+function popularModalSelects() {
+    const catOrdenadas = [...categorias].sort((a, b) => a.nome.localeCompare(b.nome));
+    const cartoesOrdenados = [...cartoes].sort((a, b) => a.nome.localeCompare(b.nome));
+
+    ['modal-categoria', 'editar-categoria'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const val = sel.value;
+        sel.innerHTML = '<option value="">Sem categoria</option>';
+        catOrdenadas.forEach(c => sel.appendChild(new Option(formatarNomeCategoria(c.nome), c.nome)));
+        if (Array.from(sel.options).some(o => o.value === val)) sel.value = val;
+    });
+
+    ['modal-cartao', 'editar-cartao'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const val = sel.value;
+        sel.innerHTML = '<option value="">Débito / Pix / Dinheiro</option>';
+        cartoesOrdenados.forEach(c => sel.appendChild(new Option(c.nome, c.nome)));
+        if (Array.from(sel.options).some(o => o.value === val)) sel.value = val;
+    });
 }
 
 function confirmarAcao(titulo, texto, callbackSim) {
@@ -284,7 +348,7 @@ function confirmarAcao(titulo, texto, callbackSim) {
     btnNao.onclick = () => modal.style.display = 'none';
 }
 
-function renderizarListaCategorias() { /* ... mantém igual ... */ 
+function renderizarListaCategorias() {
     const listaEntrada = document.getElementById('lista-categorias-entrada');
     const listaSaida = document.getElementById('lista-categorias-saida');
     const listaAmbas = document.getElementById('lista-categorias-ambas');
@@ -296,14 +360,19 @@ function renderizarListaCategorias() { /* ... mantém igual ... */
         let tipoBadge = '';
         if (cat.tipo === 'entrada') tipoBadge = '<span style="font-size:0.7rem; background:#fef3c7; color:#92400e; padding:2px 5px; border-radius:4px; margin-left:5px;">Entrada</span>';
         else if (cat.tipo === 'saida') tipoBadge = '<span style="font-size:0.7rem; background:#fee2e2; color:#991b1b; padding:2px 5px; border-radius:4px; margin-left:5px;">Saída</span>';
-        const htmlLi = `<li style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="width: 15px; height: 15px; border-radius: 50%; background-color: ${cat.cor};"></div>
-                <span class="cat-nome-texto">${formatarNomeCategoria(cat.nome)}</span>${tipoBadge}
+        const isSistema = isCategoriaInvestimento(cat.nome);
+        const iconSistema = isSistema ? '<i class="fa-solid fa-gem" style="color:var(--accent); margin-left:6px; font-size:0.8rem;" title="Categoria do Sistema"></i>' : '';
+        const acoesHtml = isSistema ? '' : `
+            <button class="btn-editar-categoria" data-id="${cat.id}" data-cor="${cat.cor}" data-tipo="${cat.tipo || 'ambas'}" title="Editar" style="color:var(--accent); background:none; border:none; cursor:pointer; padding:5px;"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn-excluir-config" data-id="${cat.id}" data-col="categorias" title="Excluir" style="color:var(--danger); background:none; border:none; cursor:pointer; padding:5px;"><i class="fa-solid fa-trash"></i></button>
+        `;
+        const htmlLi = `<li style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div style="width:14px; height:14px; border-radius:50%; background-color:${cat.cor}; flex-shrink:0;"></div>
+                <span class="cat-nome-texto">${formatarNomeCategoria(cat.nome)}</span>${tipoBadge}${iconSistema}
             </div>
-            <div class="acoes-linha" style="margin-top: 0; padding-top: 0; border: none;">
-                <button class="btn-editar-categoria" data-id="${cat.id}" data-cor="${cat.cor}" data-tipo="${cat.tipo || 'ambas'}" title="Editar Categoria" style="color: var(--accent);"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn-excluir-config" data-id="${cat.id}" data-col="categorias" title="Excluir Categoria" style="color: var(--danger);"><i class="fa-solid fa-trash"></i></button>
+            <div style="display:flex; gap:4px; align-items:center;">
+                ${acoesHtml}
             </div>
         </li>`;
         if (cat.tipo === 'entrada' && listaEntrada) listaEntrada.innerHTML += htmlLi;
@@ -311,74 +380,107 @@ function renderizarListaCategorias() { /* ... mantém igual ... */
         else if (listaAmbas) listaAmbas.innerHTML += htmlLi;
     });
 }
-function renderizarListaCartoes() { /* ... mantém igual ... */ 
+
+function renderizarListaCartoes() {
     listaCartoesUI.innerHTML = '';
     const cartoesOrdenados = [...cartoes].sort((a, b) => a.nome.localeCompare(b.nome));
     cartoesOrdenados.forEach(c => {
         const tipoLabel = c.tipo === 'credito' ? 'Crédito' : (c.tipo === 'debito' ? 'Débito' : 'Cartão');
-        listaCartoesUI.innerHTML += `<li style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <i class="fa-solid fa-credit-card" style="color: var(--text-muted)"></i> 
+        listaCartoesUI.innerHTML += `<li style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <i class="fa-solid fa-credit-card" style="color:var(--text-muted)"></i>
                 <span class="cartao-nome-texto">${c.nome}</span>
-                <span style="font-size:0.7rem; background:#f3f4f6; color:#4b5563; padding:2px 5px; border-radius:4px; margin-left:5px;">${tipoLabel}</span>
+                <span style="font-size:0.7rem; background:var(--surface-3); padding:2px 5px; border-radius:4px;">${tipoLabel}</span>
             </div>
-            <div class="acoes-linha" style="margin-top: 0; padding-top: 0; border: none;">
-                <button class="btn-editar-cartao" data-id="${c.id}" data-tipo="${c.tipo || 'credito'}" title="Editar Cartão" style="color: var(--accent); border: none; background: none; cursor: pointer; padding: 5px;"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn-excluir-config" data-id="${c.id}" data-col="cartoes" data-nome="${c.nome}" title="Excluir Cartão" style="color: var(--danger); border: none; background: none; cursor: pointer; padding: 5px;"><i class="fa-solid fa-trash"></i></button>
-            </div>
-        </li>`;
-    });
-}
-function renderizarListaEntradasFixas() { /* ... mantém igual ... */ 
-    listaEntradasFixasUI.innerHTML = '';
-    entradasFixas.forEach(g => {
-        let infoPrazo = `A partir de ${g.inicio}`;
-        if (g.fim) {
-            const [anoIni, mesIni] = g.inicio.split('-');
-            const [anoFim, mesFim] = g.fim.split('-');
-            const totalParcelas = (parseInt(anoFim) - parseInt(anoIni)) * 12 + (parseInt(mesFim) - parseInt(mesIni)) + 1;
-            infoPrazo = totalParcelas > 0 ? `${g.inicio} a ${g.fim} (${totalParcelas} parcelas)` : `${g.inicio} (Data inválida)`;
-        }
-        listaEntradasFixasUI.innerHTML += `<li style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;">
-                <strong style="color: var(--success);" class="fixo-desc">${g.desc}</strong>
-                <span style="font-size: 0.8rem; color: var(--text-muted);">R$ <span class="fixo-valor">${formatarMoeda(g.valor)}</span> | Dia <span class="fixo-dia">${g.dia}</span> | ${infoPrazo}</span>
-                <input type="hidden" class="fixo-cat" value="${g.categoria || ''}"><input type="hidden" class="fixo-cartao" value="${g.cartao || ''}">
-                <input type="hidden" class="fixo-inicio" value="${g.inicio || ''}"><input type="hidden" class="fixo-fim" value="${g.fim || ''}">
-            </div>
-            <div class="acoes-linha" style="margin-top: 0; padding-top: 0; border: none; flex-shrink: 0;">
-                <button class="btn-editar-fixo-config" data-id="${g.id}" data-col="entradasFixas" title="Editar" style="color: var(--accent); background:none; border:none; cursor:pointer; padding: 5px;"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn-excluir-fixo" data-id="${g.id}" data-col="entradasFixas" title="Excluir" style="color: var(--danger); background:none; border:none; cursor:pointer; padding: 5px;"><i class="fa-solid fa-trash"></i></button>
-            </div>
-        </li>`;
-    });
-}
-function renderizarListaSaidasFixas() { /* ... mantém igual ... */ 
-    listaSaidasFixasUI.innerHTML = '';
-    saidasFixas.forEach(g => {
-        let infoPrazo = `A partir de ${g.inicio}`;
-        if (g.fim) {
-            const [anoIni, mesIni] = g.inicio.split('-');
-            const [anoFim, mesFim] = g.fim.split('-');
-            const totalParcelas = (parseInt(anoFim) - parseInt(anoIni)) * 12 + (parseInt(mesFim) - parseInt(mesIni)) + 1;
-            infoPrazo = totalParcelas > 0 ? `${g.inicio} a ${g.fim} (${totalParcelas} parcelas)` : `${g.inicio} (Data inválida)`;
-        }
-        listaSaidasFixasUI.innerHTML += `<li style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;">
-                <strong style="color: var(--danger);" class="fixo-desc">${g.desc}</strong>
-                <span style="font-size: 0.8rem; color: var(--text-muted);">R$ <span class="fixo-valor">${formatarMoeda(g.valor)}</span> | Dia <span class="fixo-dia">${g.dia}</span> | ${infoPrazo}</span>
-                <input type="hidden" class="fixo-cat" value="${g.categoria || ''}"><input type="hidden" class="fixo-cartao" value="${g.cartao || ''}">
-                <input type="hidden" class="fixo-inicio" value="${g.inicio || ''}"><input type="hidden" class="fixo-fim" value="${g.fim || ''}">
-            </div>
-            <div class="acoes-linha" style="margin-top: 0; padding-top: 0; border: none; flex-shrink: 0;">
-                <button class="btn-editar-fixo-config" data-id="${g.id}" data-col="gastosFixos" title="Editar" style="color: var(--accent); background:none; border:none; cursor:pointer; padding: 5px;"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn-excluir-fixo" data-id="${g.id}" data-col="gastosFixos" title="Excluir" style="color: var(--danger); background:none; border:none; cursor:pointer; padding: 5px;"><i class="fa-solid fa-trash"></i></button>
+            <div style="display:flex; gap:4px;">
+                <button class="btn-editar-cartao" data-id="${c.id}" data-tipo="${c.tipo || 'credito'}" title="Editar" style="color:var(--accent); border:none; background:none; cursor:pointer; padding:5px;"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn-excluir-config" data-id="${c.id}" data-col="cartoes" data-nome="${c.nome}" title="Excluir" style="color:var(--danger); border:none; background:none; cursor:pointer; padding:5px;"><i class="fa-solid fa-trash"></i></button>
             </div>
         </li>`;
     });
 }
 
-// Edição e Exclusão nas Configurações
+function renderizarListaEntradasFixas(termoBusca = '') {
+    listaEntradasFixasUI.innerHTML = '';
+    const entradasOrdenadas = [...entradasFixas].sort((a, b) => a.desc.localeCompare(b.desc));
+    
+    // Fallback to reading the input if no term passed but input exists
+    const inputBusca = document.getElementById('busca-entradas-fixas');
+    if (!termoBusca && inputBusca) termoBusca = inputBusca.value;
+
+    entradasOrdenadas.forEach(g => {
+        if (termoBusca) {
+            const tBusca = termoBusca.toLowerCase();
+            const desc = g.desc ? g.desc.toLowerCase() : '';
+            const origem = g.origem ? g.origem.toLowerCase() : '';
+            if (!desc.includes(tBusca) && !origem.includes(tBusca)) return;
+        }
+
+        let infoPrazo = `A partir de ${g.inicio}`;
+        if (g.fim) {
+            const [anoIni, mesIni] = g.inicio.split('-');
+            const [anoFim, mesFim] = g.fim.split('-');
+            const totalParcelas = (parseInt(anoFim) - parseInt(anoIni)) * 12 + (parseInt(mesFim) - parseInt(mesIni)) + 1;
+            infoPrazo = totalParcelas > 0 ? `${g.inicio} a ${g.fim} (${totalParcelas} parcelas)` : `${g.inicio} (Data inválida)`;
+        }
+        listaEntradasFixasUI.innerHTML += `<li style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+            <div style="display:flex; flex-direction:column; gap:2px; width:100%;">
+                <strong style="color:var(--success);" class="fixo-desc">${g.desc}</strong>
+                ${g.origem || g.detalhes ? `<span style="font-size:0.75rem; color:var(--text-faint); margin-bottom:2px;">${g.origem ? g.origem + (g.detalhes ? ' - ' : '') : ''}${g.detalhes || ''}</span>` : ''}
+                <span style="font-size:0.8rem; color:var(--text-muted);">R$ <span class="fixo-valor">${formatarMoeda(g.valor)}</span> | Dia <span class="fixo-dia">${g.dia}</span> | ${infoPrazo}</span>
+                <input type="hidden" class="fixo-cat" value="${g.categoria || ''}"><input type="hidden" class="fixo-cartao" value="${g.cartao || ''}">
+                <input type="hidden" class="fixo-inicio" value="${g.inicio || ''}"><input type="hidden" class="fixo-fim" value="${g.fim || ''}">
+                <input type="hidden" class="fixo-origem" value="${g.origem || ''}"><input type="hidden" class="fixo-detalhes" value="${g.detalhes || ''}">
+            </div>
+            <div style="display:flex; gap:4px; flex-shrink:0;">
+                <button class="btn-editar-fixo-config" data-id="${g.id}" data-col="entradasFixas" title="Editar" style="color:var(--accent); background:none; border:none; cursor:pointer; padding:5px;"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn-excluir-fixo" data-id="${g.id}" data-col="entradasFixas" title="Excluir" style="color:var(--danger); background:none; border:none; cursor:pointer; padding:5px;"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        </li>`;
+    });
+}
+
+function renderizarListaSaidasFixas(termoBusca = '') {
+    listaSaidasFixasUI.innerHTML = '';
+    const saidasOrdenadas = [...saidasFixas].sort((a, b) => a.desc.localeCompare(b.desc));
+
+    // Fallback to reading the input if no term passed but input exists
+    const inputBusca = document.getElementById('busca-saidas-fixas');
+    if (!termoBusca && inputBusca) termoBusca = inputBusca.value;
+
+    saidasOrdenadas.forEach(g => {
+        if (termoBusca) {
+            const tBusca = termoBusca.toLowerCase();
+            const desc = g.desc ? g.desc.toLowerCase() : '';
+            const origem = g.origem ? g.origem.toLowerCase() : '';
+            if (!desc.includes(tBusca) && !origem.includes(tBusca)) return;
+        }
+
+        let infoPrazo = `A partir de ${g.inicio}`;
+        if (g.fim) {
+            const [anoIni, mesIni] = g.inicio.split('-');
+            const [anoFim, mesFim] = g.fim.split('-');
+            const totalParcelas = (parseInt(anoFim) - parseInt(anoIni)) * 12 + (parseInt(mesFim) - parseInt(mesIni)) + 1;
+            infoPrazo = totalParcelas > 0 ? `${g.inicio} a ${g.fim} (${totalParcelas} parcelas)` : `${g.inicio} (Data inválida)`;
+        }
+        listaSaidasFixasUI.innerHTML += `<li style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+            <div style="display:flex; flex-direction:column; gap:2px; width:100%;">
+                <strong style="color:var(--danger);" class="fixo-desc">${g.desc}</strong>
+                ${g.origem || g.detalhes ? `<span style="font-size:0.75rem; color:var(--text-faint); margin-bottom:2px;">${g.origem ? g.origem + (g.detalhes ? ' - ' : '') : ''}${g.detalhes || ''}</span>` : ''}
+                <span style="font-size:0.8rem; color:var(--text-muted);">R$ <span class="fixo-valor">${formatarMoeda(g.valor)}</span> | Dia <span class="fixo-dia">${g.dia}</span> | ${infoPrazo}</span>
+                <input type="hidden" class="fixo-cat" value="${g.categoria || ''}"><input type="hidden" class="fixo-cartao" value="${g.cartao || ''}">
+                <input type="hidden" class="fixo-inicio" value="${g.inicio || ''}"><input type="hidden" class="fixo-fim" value="${g.fim || ''}">
+                <input type="hidden" class="fixo-origem" value="${g.origem || ''}"><input type="hidden" class="fixo-detalhes" value="${g.detalhes || ''}">
+            </div>
+            <div style="display:flex; gap:4px; flex-shrink:0;">
+                <button class="btn-editar-fixo-config" data-id="${g.id}" data-col="gastosFixos" title="Editar" style="color:var(--accent); background:none; border:none; cursor:pointer; padding:5px;"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn-excluir-fixo" data-id="${g.id}" data-col="gastosFixos" title="Excluir" style="color:var(--danger); background:none; border:none; cursor:pointer; padding:5px;"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        </li>`;
+    });
+}
+
+// --- Config Edit Handlers ---
 let impactoTimer;
 function solicitarImpactoFixo(callback) {
     const modal = document.getElementById('modal-impacto-fixo');
@@ -395,13 +497,8 @@ function solicitarImpactoFixo(callback) {
     if (impactoTimer) clearInterval(impactoTimer);
     impactoTimer = setInterval(() => {
         timeLeft--;
-        if (timeLeft <= 0) {
-            clearInterval(impactoTimer);
-            btnConfirmar.disabled = false;
-            btnConfirmar.innerText = 'Confirmar Alteração';
-        } else {
-            btnConfirmar.innerText = `Confirmar (${timeLeft}s)`;
-        }
+        if (timeLeft <= 0) { clearInterval(impactoTimer); btnConfirmar.disabled = false; btnConfirmar.innerText = 'Confirmar Alteração'; }
+        else btnConfirmar.innerText = `Confirmar (${timeLeft}s)`;
     }, 1000);
 
     const limparModal = () => {
@@ -423,12 +520,10 @@ document.addEventListener('click', async (e) => {
     const btnEditarFixoConfig = e.target.closest('.btn-editar-fixo-config');
     const btnSalvarFixoConfig = e.target.closest('.btn-salvar-fixo-config');
     const btnCancelarFixoConfig = e.target.closest('.btn-cancelar-fixo-config');
-
     const btnExcluirConfig = e.target.closest('.btn-excluir-config');
     const btnEditarCategoria = e.target.closest('.btn-editar-categoria');
     const btnSalvarCategoria = e.target.closest('.btn-salvar-categoria');
     const btnCancelarCategoria = e.target.closest('.btn-cancelar-categoria');
-
     const btnEditarCartao = e.target.closest('.btn-editar-cartao');
     const btnSalvarCartao = e.target.closest('.btn-salvar-cartao');
     const btnCancelarCartao = e.target.closest('.btn-cancelar-cartao');
@@ -440,7 +535,6 @@ document.addEventListener('click', async (e) => {
             if (impacto === 'todos') {
                 await deleteDoc(doc(window.db, col, id));
                 const campoFixoId = col === 'entradasFixas' ? 'entradaFixaId' : 'gastoFixoId';
-                // ATUALIZADO PARA ARRAYS: Percorrer meses e limpar
                 const docsSnap = await getDocs(query(collection(window.db, "dados_mensais"), where("userId", "==", userIdLogado)));
                 docsSnap.forEach(async (dSnap) => {
                     let arr = dSnap.data().transacoes || [];
@@ -468,6 +562,8 @@ document.addEventListener('click', async (e) => {
         const cartao = li.querySelector('.fixo-cartao').value;
         const inicio = li.querySelector('.fixo-inicio').value;
         const fim = li.querySelector('.fixo-fim').value;
+        const origem = li.querySelector('.fixo-origem').value;
+        const detalhes = li.querySelector('.fixo-detalhes').value;
 
         const catOrdenadas = [...categorias].sort((a, b) => a.nome.localeCompare(b.nome));
         const tipoFixo = col === 'entradasFixas' ? 'entrada' : 'saida';
@@ -479,41 +575,40 @@ document.addEventListener('click', async (e) => {
         let cartaoOptions = '<option value="">Débito/pix/dinheiro</option>';
         cartoesOrdenados.forEach(c => cartaoOptions += `<option value="${c.nome}" ${c.nome === cartao ? 'selected' : ''}>${c.nome}</option>`);
 
-        li.innerHTML = `
-            <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-                <div style="display: flex; gap: 5px;">
-                    <input type="text" class="edit-fixo-desc" value="${desc}" style="flex: 2; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
-                    <input type="number" step="0.01" class="edit-fixo-valor" value="${valor}" style="flex: 1; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
-                    <input type="number" class="edit-fixo-dia" value="${dia}" min="1" max="31" style="width: 60px; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
-                </div>
-                <div style="display: flex; gap: 5px;">
-                    <select class="edit-fixo-cat" style="flex: 1; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">${catOptions}</select>
-                    <select class="edit-fixo-cartao" style="flex: 1; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">${cartaoOptions}</select>
-                </div>
-                <div style="display: flex; gap: 5px; align-items: center;">
-                    <input type="month" class="edit-fixo-inicio" value="${inicio}" style="flex: 1; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
-                    <span style="color: var(--text-muted); font-size: 0.8rem;">até</span>
-                    <input type="month" class="edit-fixo-fim" value="${fim}" style="flex: 1; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 5px;">
-                    <button class="btn-salvar-fixo-config btn-primary" data-id="${id}" data-col="${col}" style="flex: 1; padding: 5px;"><i class="fa-solid fa-check"></i> Salvar</button>
-                    <button class="btn-cancelar-fixo-config btn-secondary" style="flex: 1; padding: 5px;">Cancelar</button>
-                </div>
-            </div>`;
+        li.innerHTML = `<div style="display:flex; flex-direction:column; gap:8px; width:100%;">
+            <div style="display:flex; gap:5px;">
+                <input type="text" class="edit-fixo-desc" value="${desc}" style="flex:2; padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text-main);">
+                <input type="text" class="edit-fixo-origem" value="${origem}" placeholder="Origem" style="flex:2; padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text-main);">
+                <input type="number" step="0.01" class="edit-fixo-valor" value="${valor}" style="flex:1; padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text-main);">
+                <input type="number" class="edit-fixo-dia" value="${dia}" min="1" max="31" style="width:60px; padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text-main);">
+            </div>
+            <textarea class="edit-fixo-detalhes" placeholder="Detalhes" rows="1" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text-main); font-family:inherit;">${detalhes}</textarea>
+            <div style="display:flex; gap:5px;">
+                <select class="edit-fixo-cat" style="flex:1; padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text-main);">${catOptions}</select>
+                <select class="edit-fixo-cartao" style="flex:1; padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text-main);">${cartaoOptions}</select>
+            </div>
+            <div style="display:flex; gap:5px; align-items:center;">
+                <input type="month" class="edit-fixo-inicio" value="${inicio}" style="flex:1; padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text-main);">
+                <span style="color:var(--text-muted); font-size:0.8rem;">até</span>
+                <input type="month" class="edit-fixo-fim" value="${fim}" style="flex:1; padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text-main);">
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn-salvar-fixo-config btn-primary" data-id="${id}" data-col="${col}" style="flex:1;"><i class="fa-solid fa-check"></i> Salvar</button>
+                <button class="btn-cancelar-fixo-config btn-secondary" style="flex:1;">Cancelar</button>
+            </div>
+        </div>`;
     }
 
-    if (btnCancelarFixoConfig) {
-        renderizarListaEntradasFixas();
-        renderizarListaSaidasFixas();
-    }
+    if (btnCancelarFixoConfig) { renderizarListaEntradasFixas(); renderizarListaSaidasFixas(); }
 
     if (btnSalvarFixoConfig) {
         const li = btnSalvarFixoConfig.closest('li');
         const id = btnSalvarFixoConfig.getAttribute('data-id');
         const col = btnSalvarFixoConfig.getAttribute('data-col');
-
         const novosDados = {
             desc: li.querySelector('.edit-fixo-desc').value,
+            origem: li.querySelector('.edit-fixo-origem').value.trim(),
+            detalhes: li.querySelector('.edit-fixo-detalhes').value.trim(),
             valor: parseFloat(li.querySelector('.edit-fixo-valor').value),
             dia: li.querySelector('.edit-fixo-dia').value,
             categoria: li.querySelector('.edit-fixo-cat').value,
@@ -521,13 +616,10 @@ document.addEventListener('click', async (e) => {
             inicio: li.querySelector('.edit-fixo-inicio').value,
             fim: li.querySelector('.edit-fixo-fim').value
         };
-
         solicitarImpactoFixo(async (impacto) => {
             if (impacto === 'todos') {
                 await updateDoc(doc(window.db, col, id), novosDados);
                 const campoFixoId = col === 'entradasFixas' ? 'entradaFixaId' : 'gastoFixoId';
-                
-                // ATUALIZADO PARA ARRAYS: Percorrer meses
                 const docsSnap = await getDocs(query(collection(window.db, "dados_mensais"), where("userId", "==", userIdLogado)));
                 docsSnap.forEach(async (dSnap) => {
                     let changed = false;
@@ -537,18 +629,17 @@ document.addEventListener('click', async (e) => {
                             changed = true;
                             const novoDia = String(novosDados.dia).padStart(2, '0');
                             const dataAtualizada = t.data.substring(0, 8) + novoDia;
-                            return { ...t, descricao: novosDados.desc, valor: novosDados.valor, categoria: novosDados.categoria, cartao: novosDados.cartao, data: dataAtualizada };
+                            return { ...t, descricao: novosDados.desc, valor: novosDados.valor, categoria: novosDados.categoria, cartao: novosDados.cartao, data: dataAtualizada, origem: novosDados.origem, detalhes: novosDados.detalhes };
                         }
                         return t;
                     });
-                    if(changed) await updateDoc(dSnap.ref, { transacoes: arr });
+                    if (changed) await updateDoc(dSnap.ref, { transacoes: arr });
                 });
             } else if (impacto === 'frente') {
                 const dataNav = new Date(dataNavegacao.getFullYear(), dataNavegacao.getMonth());
                 dataNav.setMonth(dataNav.getMonth() - 1);
                 const mesPassado = `${dataNav.getFullYear()}-${String(dataNav.getMonth() + 1).padStart(2, '0')}`;
                 await updateDoc(doc(window.db, col, id), { fim: mesPassado });
-
                 novosDados.inicio = `${dataNavegacao.getFullYear()}-${String(dataNavegacao.getMonth() + 1).padStart(2, '0')}`;
                 novosDados.userId = userIdLogado;
                 await addDoc(collection(window.db, col), novosDados);
@@ -578,20 +669,17 @@ document.addEventListener('click', async (e) => {
         const cor = btnEditarCategoria.getAttribute('data-cor');
         const tipo = btnEditarCategoria.getAttribute('data-tipo');
         const nomeTexto = li.querySelector('.cat-nome-texto').innerText;
-
-        li.innerHTML = `
-            <div style="display: flex; gap: 5px; width: 100%;">
-                <input type="text" class="edit-cat-nome" value="${nomeTexto}" data-old-nome="${nomeTexto}" style="flex: 1; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
-                <select class="edit-cat-tipo" style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
-                    <option value="ambas" ${tipo === 'ambas' ? 'selected' : ''}>Ambas</option>
-                    <option value="entrada" ${tipo === 'entrada' ? 'selected' : ''}>Entrada</option>
-                    <option value="saida" ${tipo === 'saida' ? 'selected' : ''}>Saída</option>
-                </select>
-                <input type="color" class="edit-cat-cor" value="${cor}" style="width: 40px; height: 35px; border: 1px solid var(--border); border-radius: 4px; padding: 0;">
-                <button class="btn-salvar-categoria" data-id="${id}" style="color: var(--success); background: none; border: none; cursor: pointer; font-size: 1.1rem; margin-left: 5px;"><i class="fa-solid fa-check"></i></button>
-                <button class="btn-cancelar-categoria" style="color: var(--text-muted); background: none; border: none; cursor: pointer; font-size: 1.1rem; margin-left: 5px;"><i class="fa-solid fa-times"></i></button>
-            </div>
-        `;
+        li.innerHTML = `<div style="display:flex; gap:5px; width:100%; align-items:center;">
+            <input type="text" class="edit-cat-nome" value="${nomeTexto}" data-old-nome="${nomeTexto}" style="flex:1; padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text-main);">
+            <select class="edit-cat-tipo" style="padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text-main);">
+                <option value="ambas" ${tipo === 'ambas' ? 'selected' : ''}>Ambas</option>
+                <option value="entrada" ${tipo === 'entrada' ? 'selected' : ''}>Entrada</option>
+                <option value="saida" ${tipo === 'saida' ? 'selected' : ''}>Saída</option>
+            </select>
+            <input type="color" class="edit-cat-cor" value="${cor}" style="width:36px; height:36px; border:1px solid var(--border); border-radius:6px; padding:2px; cursor:pointer;">
+            <button class="btn-salvar-categoria" data-id="${id}" style="color:var(--success); background:none; border:none; cursor:pointer; font-size:1.1rem;"><i class="fa-solid fa-check"></i></button>
+            <button class="btn-cancelar-categoria" style="color:var(--text-muted); background:none; border:none; cursor:pointer; font-size:1.1rem;"><i class="fa-solid fa-times"></i></button>
+        </div>`;
     }
 
     if (btnSalvarCategoria) {
@@ -601,28 +689,17 @@ document.addEventListener('click', async (e) => {
         const nomeAntigo = li.querySelector('.edit-cat-nome').getAttribute('data-old-nome');
         const novaCor = li.querySelector('.edit-cat-cor').value;
         const novoTipo = li.querySelector('.edit-cat-tipo').value;
-
         await updateDoc(doc(window.db, "categorias", id), { nome: novoNome, cor: novaCor, tipo: novoTipo });
-
         if (novoNome !== nomeAntigo) {
-            // ATUALIZADO PARA ARRAYS
             const docsSnap = await getDocs(query(collection(window.db, "dados_mensais"), where("userId", "==", userIdLogado)));
             docsSnap.forEach(async (dSnap) => {
                 let changed = false;
                 let arr = dSnap.data().transacoes || [];
-                arr = arr.map(t => {
-                    if (t.categoria === nomeAntigo && !t.isProjection) { changed = true; return {...t, categoria: novoNome}; }
-                    return t;
-                });
-                if(changed) await updateDoc(dSnap.ref, { transacoes: arr });
+                arr = arr.map(t => { if (t.categoria === nomeAntigo && !t.isProjection) { changed = true; return {...t, categoria: novoNome}; } return t; });
+                if (changed) await updateDoc(dSnap.ref, { transacoes: arr });
             });
-
-            entradasFixas.forEach(async (t) => {
-                if (t.categoria === nomeAntigo) await updateDoc(doc(window.db, "entradasFixas", t.id), { categoria: novoNome });
-            });
-            saidasFixas.forEach(async (t) => {
-                if (t.categoria === nomeAntigo) await updateDoc(doc(window.db, "gastosFixos", t.id), { categoria: novoNome });
-            });
+            entradasFixas.forEach(async (t) => { if (t.categoria === nomeAntigo) await updateDoc(doc(window.db, "entradasFixas", t.id), { categoria: novoNome }); });
+            saidasFixas.forEach(async (t) => { if (t.categoria === nomeAntigo) await updateDoc(doc(window.db, "gastosFixos", t.id), { categoria: novoNome }); });
         }
     }
 
@@ -633,24 +710,19 @@ document.addEventListener('click', async (e) => {
         const id = btnEditarCartao.getAttribute('data-id');
         const tipo = btnEditarCartao.getAttribute('data-tipo');
         const nomeTexto = li.querySelector('.cartao-nome-texto').innerText;
-        let avisoEmUso = "";
         const emUso = transacoes.some(t => t.cartao === nomeTexto && t.status !== 'excluida') || saidasFixas.some(g => g.cartao === nomeTexto) || entradasFixas.some(g => g.cartao === nomeTexto);
-        if (emUso) avisoEmUso = "<div style='color:var(--danger); font-size: 0.75rem; margin-top: 5px; width: 100%; text-align: left;'>⚠️ Cartão em uso. Edições afetarão lançamentos existentes.</div>";
-
-        li.innerHTML = `
-            <div style="display: flex; flex-direction: column; width: 100%;">
-                <div style="display: flex; gap: 5px; width: 100%;">
-                    <input type="text" class="edit-cartao-nome" value="${nomeTexto}" data-old-nome="${nomeTexto}" style="flex: 1; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
-                    <select class="edit-cartao-tipo" style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
-                        <option value="credito" ${tipo === 'credito' ? 'selected' : ''}>Crédito</option>
-                        <option value="debito" ${tipo === 'debito' ? 'selected' : ''}>Débito</option>
-                    </select>
-                    <button class="btn-salvar-cartao" data-id="${id}" style="color: var(--success); background: none; border: none; cursor: pointer; font-size: 1.1rem; margin-left: 5px;"><i class="fa-solid fa-check"></i></button>
-                    <button class="btn-cancelar-cartao" style="color: var(--text-muted); background: none; border: none; cursor: pointer; font-size: 1.1rem; margin-left: 5px;"><i class="fa-solid fa-times"></i></button>
-                </div>
-                ${avisoEmUso}
-            </div>
-        `;
+        const avisoEmUso = emUso ? "<div style='color:var(--danger); font-size:0.75rem; margin-top:5px;'>⚠️ Cartão em uso. Edições afetarão lançamentos existentes.</div>" : "";
+        li.innerHTML = `<div style="display:flex; flex-direction:column; width:100%;">
+            <div style="display:flex; gap:5px; width:100%; align-items:center;">
+                <input type="text" class="edit-cartao-nome" value="${nomeTexto}" data-old-nome="${nomeTexto}" style="flex:1; padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text-main);">
+                <select class="edit-cartao-tipo" style="padding:0.5rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); color:var(--text-main);">
+                    <option value="credito" ${tipo === 'credito' ? 'selected' : ''}>Crédito</option>
+                    <option value="debito" ${tipo === 'debito' ? 'selected' : ''}>Débito</option>
+                </select>
+                <button class="btn-salvar-cartao" data-id="${id}" style="color:var(--success); background:none; border:none; cursor:pointer; font-size:1.1rem;"><i class="fa-solid fa-check"></i></button>
+                <button class="btn-cancelar-cartao" style="color:var(--text-muted); background:none; border:none; cursor:pointer; font-size:1.1rem;"><i class="fa-solid fa-times"></i></button>
+            </div>${avisoEmUso}
+        </div>`;
     }
 
     if (btnSalvarCartao) {
@@ -659,35 +731,24 @@ document.addEventListener('click', async (e) => {
         const novoNome = li.querySelector('.edit-cartao-nome').value;
         const nomeAntigo = li.querySelector('.edit-cartao-nome').getAttribute('data-old-nome');
         const novoTipo = li.querySelector('.edit-cartao-tipo').value;
-
         await updateDoc(doc(window.db, "cartoes", id), { nome: novoNome, tipo: novoTipo });
-
         if (novoNome !== nomeAntigo) {
-            // ATUALIZADO PARA ARRAYS
             const docsSnap = await getDocs(query(collection(window.db, "dados_mensais"), where("userId", "==", userIdLogado)));
             docsSnap.forEach(async (dSnap) => {
                 let changed = false;
                 let arr = dSnap.data().transacoes || [];
-                arr = arr.map(t => {
-                    if (t.cartao === nomeAntigo && !t.isProjection) { changed = true; return {...t, cartao: novoNome}; }
-                    return t;
-                });
-                if(changed) await updateDoc(dSnap.ref, { transacoes: arr });
+                arr = arr.map(t => { if (t.cartao === nomeAntigo && !t.isProjection) { changed = true; return {...t, cartao: novoNome}; } return t; });
+                if (changed) await updateDoc(dSnap.ref, { transacoes: arr });
             });
-
-            entradasFixas.forEach(async (t) => {
-                if (t.cartao === nomeAntigo) await updateDoc(doc(window.db, "entradasFixas", t.id), { cartao: novoNome });
-            });
-            saidasFixas.forEach(async (t) => {
-                if (t.cartao === nomeAntigo) await updateDoc(doc(window.db, "gastosFixos", t.id), { cartao: novoNome });
-            });
+            entradasFixas.forEach(async (t) => { if (t.cartao === nomeAntigo) await updateDoc(doc(window.db, "entradasFixas", t.id), { cartao: novoNome }); });
+            saidasFixas.forEach(async (t) => { if (t.cartao === nomeAntigo) await updateDoc(doc(window.db, "gastosFixos", t.id), { cartao: novoNome }); });
         }
     }
 
     if (btnCancelarCartao) renderizarListaCartoes();
 });
 
-// Eventos de Submissão das Configurações
+// --- Config form submissions ---
 formCategoria.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!window.db || !userIdLogado) return;
@@ -697,8 +758,9 @@ formCategoria.addEventListener('submit', async (e) => {
         tipo: document.getElementById('nova-cat-tipo').value,
         userId: userIdLogado
     });
-    document.getElementById('form-categoria').reset();
+    formCategoria.reset();
 });
+
 formCartao.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!window.db || !userIdLogado) return;
@@ -707,13 +769,16 @@ formCartao.addEventListener('submit', async (e) => {
         tipo: document.getElementById('novo-cartao-tipo').value,
         userId: userIdLogado
     });
-    document.getElementById('form-cartao').reset();
+    formCartao.reset();
 });
+
 formEntradasFixas.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!window.db || !userIdLogado) return;
     await addDoc(collection(window.db, "entradasFixas"), {
         desc: document.getElementById('nova-entrada-fixa-desc').value,
+        origem: document.getElementById('nova-entrada-fixa-origem').value.trim(),
+        detalhes: document.getElementById('nova-entrada-fixa-detalhes').value.trim(),
         valor: parseFloat(document.getElementById('nova-entrada-fixa-valor').value),
         dia: document.getElementById('nova-entrada-fixa-dia').value,
         categoria: document.getElementById('nova-entrada-fixa-cat').value,
@@ -722,13 +787,16 @@ formEntradasFixas.addEventListener('submit', async (e) => {
         fim: document.getElementById('nova-entrada-fixa-fim').value,
         userId: userIdLogado
     });
-    document.getElementById('form-entradas-fixas').reset();
+    formEntradasFixas.reset();
 });
+
 formSaidasFixas.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!window.db || !userIdLogado) return;
     await addDoc(collection(window.db, "gastosFixos"), {
         desc: document.getElementById('nova-saida-fixa-desc').value,
+        origem: document.getElementById('nova-saida-fixa-origem').value.trim(),
+        detalhes: document.getElementById('nova-saida-fixa-detalhes').value.trim(),
         valor: parseFloat(document.getElementById('nova-saida-fixa-valor').value),
         dia: document.getElementById('nova-saida-fixa-dia').value,
         categoria: document.getElementById('nova-saida-fixa-cat').value,
@@ -737,10 +805,10 @@ formSaidasFixas.addEventListener('submit', async (e) => {
         fim: document.getElementById('nova-saida-fixa-fim').value,
         userId: userIdLogado
     });
-    document.getElementById('form-saidas-fixas').reset();
+    formSaidasFixas.reset();
 });
 
-// --- Lógica Principal de Renderização e Cálculos ---
+// --- Core Render Logic ---
 function getMesAnterior(yyyy_mm) {
     let [ano, mes] = yyyy_mm.split('-');
     let date = new Date(ano, mes - 1);
@@ -769,13 +837,14 @@ const isCategoriaInvestimento = (nome) => {
 
 const formatarNomeCategoria = (nome) => {
     if (!nome) return '';
-    return isCategoriaInvestimento(nome) ? nome + ' ◆' : nome;
+    return nome;
 };
 
-function atualizarResumo(transacoesRenderizadas, mesNavString) {
+function atualizarResumo(transacoesRenderizadas, mesNavString, todasTransacoesMesSemFiltro) {
     const mesAnteriorStr = getMesAnterior(mesNavString);
     let totalEntradasMes = 0; let totalSaidasVistaMes = 0; let totalUsoCartaoMes = 0; let totalFaturaAnterior = 0;
-
+    
+    let totalEntradasMesSemFiltro = 0; let totalSaidasVistaMesSemFiltro = 0; let totalUsoCartaoMesSemFiltro = 0; let totalFaturaAnteriorSemFiltro = 0;
 
     transacoesRenderizadas.forEach(t => {
         if (t.status === 'excluida') return;
@@ -785,6 +854,17 @@ function atualizarResumo(transacoesRenderizadas, mesNavString) {
             else totalSaidasVistaMes += t.valor;
         }
     });
+
+    if (todasTransacoesMesSemFiltro) {
+        todasTransacoesMesSemFiltro.forEach(t => {
+            if (t.status === 'excluida') return;
+            if (t.tipo === 'entrada') totalEntradasMesSemFiltro += t.valor;
+            else if (t.tipo === 'saida') {
+                if (checkIsCredito(t.cartao)) totalUsoCartaoMesSemFiltro += t.valor;
+                else totalSaidasVistaMesSemFiltro += t.valor;
+            }
+        });
+    }
 
     transacoes.forEach(t => {
         if (t.status === 'excluida') return;
@@ -797,9 +877,14 @@ function atualizarResumo(transacoesRenderizadas, mesNavString) {
     saidasFixas.forEach(g => {
         if (checkIsCredito(g.cartao) && mesAnteriorStr >= g.inicio && (!g.fim || mesAnteriorStr <= g.fim)) {
             const jaExiste = transacoes.some(t => t.gastoFixoId === g.id && t.data.startsWith(mesAnteriorStr));
-            if (!jaExiste) totalFaturaAnterior += parseFloat(g.valor);
+            if (!jaExiste) {
+                totalFaturaAnterior += parseFloat(g.valor);
+            }
         }
     });
+    
+    // For now we assume Fatura Anterior isn't deeply filtered in the month view, but we copy it
+    totalFaturaAnteriorSemFiltro = totalFaturaAnterior;
 
     let totalEfetivo = 0; let totalProjetado = 0;
     const processTransactionForBalance = (t) => {
@@ -807,7 +892,6 @@ function atualizarResumo(transacoesRenderizadas, mesNavString) {
         const tMes = t.data.substring(0, 7);
         const isCartaoCredito = t.tipo === 'saida' && checkIsCredito(t.cartao);
         const mesImpacto = isCartaoCredito ? getMesCobranca(tMes) : tMes;
-
         if (mesImpacto <= mesNavString) {
             if (normalizarStatus(t) === 'realizada') { t.tipo === 'entrada' ? totalEfetivo += t.valor : totalEfetivo -= t.valor; }
             if (normalizarStatus(t) !== 'simulacao') { t.tipo === 'entrada' ? totalProjetado += t.valor : totalProjetado -= t.valor; }
@@ -847,12 +931,55 @@ function atualizarResumo(transacoesRenderizadas, mesNavString) {
         }
     });
 
+    // Update card elements
     document.getElementById('total-entradas').innerText = `R$\u00A0${formatarMoeda(totalEntradasMes)}`;
     document.getElementById('total-saidas').innerText = `R$\u00A0${formatarMoeda(totalSaidasVistaMes)}`;
     document.getElementById('total-fatura').innerText = `R$\u00A0${formatarMoeda(totalFaturaAnterior)}`;
     document.getElementById('total-cartao-mes').innerText = `R$\u00A0${formatarMoeda(totalUsoCartaoMes)}`;
     document.getElementById('saldo-atual').innerText = `R$\u00A0${formatarMoeda(totalEfetivo)}`;
     document.getElementById('saldo-previsto').innerText = `R$\u00A0${formatarMoeda(totalProjetado)}`;
+
+    // Update computed "Saídas" card total = fatura anterior + gastos à vista
+    const totalSaidasCard = totalSaidasVistaMes + totalFaturaAnterior;
+    const totalSaidasCardSemFiltro = totalSaidasVistaMesSemFiltro + totalFaturaAnteriorSemFiltro;
+    const saidasTotal = document.getElementById('saidas-valor-total');
+    if (saidasTotal) saidasTotal.innerText = `R$\u00A0${formatarMoeda(totalSaidasCard)}`;
+
+    // Color indicators for modified totals
+    const cardEntradas = document.querySelector('.card.entrada');
+    const cardSaidas = document.querySelector('.card.saida');
+    
+    if (todasTransacoesMesSemFiltro) {
+        if (totalEntradasMes !== totalEntradasMesSemFiltro && cardEntradas) {
+            cardEntradas.style.background = 'var(--surface-3)';
+            cardEntradas.style.borderColor = 'var(--success)';
+            cardEntradas.title = "Valor alterado pelos filtros";
+        } else if (cardEntradas) {
+            cardEntradas.style.background = '';
+            cardEntradas.style.borderColor = '';
+            cardEntradas.title = "";
+        }
+
+        if (totalSaidasCard !== totalSaidasCardSemFiltro && cardSaidas) {
+            cardSaidas.style.background = 'var(--surface-3)';
+            cardSaidas.style.borderColor = 'var(--danger)';
+            cardSaidas.title = "Valor alterado pelos filtros";
+        } else if (cardSaidas) {
+            cardSaidas.style.background = '';
+            cardSaidas.style.borderColor = '';
+            cardSaidas.title = "";
+        }
+    }
+
+    // Color saldo-atual based on value
+    const saldoEl = document.getElementById('saldo-atual');
+    if (saldoEl) {
+        saldoEl.style.color = totalEfetivo >= 0 ? 'var(--accent)' : 'var(--danger)';
+    }
+    const saldoPrevEl = document.getElementById('saldo-previsto');
+    if (saldoPrevEl) {
+        saldoPrevEl.style.color = totalProjetado >= 0 ? 'var(--success)' : 'var(--danger)';
+    }
 }
 
 function gerarOptionsSelect(lista, valorSelecionado) {
@@ -875,6 +1002,7 @@ function renderizarLista() {
                     id: 'proje_' + g.id + '_' + navYYYYMM,
                     entradaFixaId: g.id, isProjection: true, tipo: 'entrada',
                     descricao: g.desc, valor: parseFloat(g.valor),
+                    origem: g.origem, detalhes: g.detalhes,
                     data: `${navYYYYMM}-${String(g.dia).padStart(2, '0')}`,
                     categoria: g.categoria || 'Sem Categoria', cartao: g.cartao || '', status: 'prevista'
                 });
@@ -890,6 +1018,7 @@ function renderizarLista() {
                     id: 'projs_' + g.id + '_' + navYYYYMM,
                     gastoFixoId: g.id, isProjection: true, tipo: 'saida',
                     descricao: g.desc, valor: parseFloat(g.valor),
+                    origem: g.origem, detalhes: g.detalhes,
                     data: `${navYYYYMM}-${String(g.dia).padStart(2, '0')}`,
                     categoria: g.categoria || 'Sem Categoria', cartao: g.cartao || '', status: 'prevista'
                 });
@@ -914,9 +1043,9 @@ function renderizarLista() {
     let transacoesFiltradas = todasTransacoes.filter(t => {
         if (t.status === 'excluida') return false;
         const tStatus = normalizarStatus(t);
-        const passaSimulacao = incluirSimulacoes ? true : tStatus !== 'simulacao';
+        const passaSimulacao = (incluirSimulacoes || valStatus === 'simulacao') ? true : tStatus !== 'simulacao';
         const passaMes = t.data.startsWith(prefixoData);
-        
+
         let passaTipo = true;
         if (valTipo === 'entrada') passaTipo = t.tipo === 'entrada';
         else if (valTipo === 'saida') passaTipo = t.tipo === 'saida';
@@ -924,7 +1053,7 @@ function renderizarLista() {
         else if (valTipo === 'saida_fixa') passaTipo = !!t.gastoFixoId;
 
         let passaCat = valCat === '' || t.categoria === valCat;
-        
+
         let passaCartao = true;
         if (valCartao === 'debito_pix_dinheiro') passaCartao = !t.cartao;
         else if (valCartao === 'todos_credito') passaCartao = checkIsCredito(t.cartao);
@@ -949,11 +1078,9 @@ function renderizarLista() {
                 else if (criteria.col === 'cartao') { valA = (a.cartao || '').toLowerCase(); valB = (b.cartao || '').toLowerCase(); }
                 else if (criteria.col === 'valor') { valA = a.valor; valB = b.valor; }
                 else if (criteria.col === 'status') { valA = normalizarStatus(a).toLowerCase(); valB = normalizarStatus(b).toLowerCase(); }
-
                 let cmp = 0;
                 if (typeof valA === 'string') cmp = valA.localeCompare(valB);
                 else cmp = valA - valB;
-
                 if (cmp !== 0) { return criteria.dir === 'asc' ? cmp : -cmp; }
             }
             return 0;
@@ -963,112 +1090,165 @@ function renderizarLista() {
     document.querySelectorAll('#lista-header .sortable').forEach(span => {
         const col = span.getAttribute('data-sort');
         const icon = span.querySelector('i');
-        span.classList.remove('active-sort-asc', 'active-sort-desc');
+        span.classList.remove('active-sort-asc','active-sort-desc');
         const sortIndex = listSortConfig.findIndex(s => s.col === col);
         if (sortIndex !== -1) {
             const dir = listSortConfig[sortIndex].dir;
             span.classList.add(dir === 'asc' ? 'active-sort-asc' : 'active-sort-desc');
-            icon.className = dir === 'asc' ? 'fa-solid fa-sort-up' : 'fa-solid fa-sort-down';
+            if (icon) icon.className = dir === 'asc' ? 'fa-solid fa-sort-up' : 'fa-solid fa-sort-down';
         } else {
-            icon.className = 'fa-solid fa-sort';
+            if (icon) icon.className = 'fa-solid fa-sort';
         }
     });
 
-    transacoesFiltradas.forEach((t, index) => {
-        const li = document.createElement('li');
-        li.setAttribute('data-id', t.id);
+    if (transacoesFiltradas.length === 0) {
+        listaTransacoes.innerHTML = `<li class="empty-state"><i class="fa-solid fa-receipt"></i><p>Nenhum lançamento encontrado para este mês</p></li>`;
+    } else {
+        transacoesFiltradas.forEach((t, index) => {
+            const li = document.createElement('li');
+            li.setAttribute('data-id', t.id);
 
-        const tStatus = normalizarStatus(t);
-        if (tStatus === 'simulacao') li.classList.add('simulacao-row');
+            const tStatus = normalizarStatus(t);
+            if (tStatus === 'simulacao') li.classList.add('status-simulacao-row');
+            else if (tStatus === 'realizada') li.classList.add('status-realizada-row');
+            else if (tStatus === 'prevista') li.classList.add('status-previsto-row');
+            li.classList.add(t.tipo === 'entrada' ? 'tipo-entrada' : 'tipo-saida');
 
-        const valorFormatado = `R$\u00A0${formatarMoeda(t.valor)}`;
-        const classeValor = t.tipo === 'entrada' ? 'valor-entrada' : 'valor-saida';
-        const sinal = t.tipo === 'entrada' ? '+' : '-';
+            const valorFormatado = `R$\u00A0${formatarMoeda(t.valor)}`;
+            const sinal = t.tipo === 'entrada' ? '+' : '-';
 
-        let labelStatus = '';
-        if (tStatus === 'realizada') labelStatus = `<span class="badge realizada">Realizada</span>`;
-        else if (tStatus === 'prevista') labelStatus = `<span class="badge prevista">Previsto</span>`;
-        else if (tStatus === 'simulacao') labelStatus = `<span class="badge simulacao">Simulação</span>`;
-        else if (tStatus) {
-            labelStatus = `<span class="badge">${tStatus.charAt(0).toUpperCase() + tStatus.slice(1)}</span>`;
-        }
+            let labelStatus = '';
+            if (tStatus === 'realizada') labelStatus = `<span class="status-badge realizada" onclick="event.stopPropagation(); window.alternarStatusRapido('${t.id}', '${tStatus}', '${t.docId || ''}')" style="cursor:pointer;" title="Mudar para Previsto"><i class="fa-solid fa-circle-check" style="font-size:0.65rem;"></i> Realizada</span>`;
+            else if (tStatus === 'prevista') labelStatus = `<span class="status-badge prevista" onclick="event.stopPropagation(); window.alternarStatusRapido('${t.id}', '${tStatus}', '${t.docId || ''}')" style="cursor:pointer;" title="Mudar para Realizado"><i class="fa-regular fa-clock" style="font-size:0.65rem;"></i> Previsto</span>`;
+            else if (tStatus === 'simulacao') labelStatus = `<span class="status-badge simulacao" onclick="event.stopPropagation(); window.alternarStatusRapido('${t.id}', '${tStatus}', '${t.docId || ''}')" style="cursor:pointer;" title="Mudar para Previsto"><i class="fa-solid fa-flask" style="font-size:0.65rem;"></i> Simulação</span>`;
+            else if (tStatus) labelStatus = `<span class="status-badge">${tStatus.charAt(0).toUpperCase() + tStatus.slice(1)}</span>`;
 
-        let descFinal = t.descricao;
-        let parcelaInfo = "";
-        let fixoOrigem = t.gastoFixoId ? saidasFixas.find(g => g.id === t.gastoFixoId) : (t.entradaFixaId ? entradasFixas.find(g => g.id === t.entradaFixaId) : null);
-
-        if (fixoOrigem && fixoOrigem.fim) {
-            const [anoIni, mesIni] = fixoOrigem.inicio.split('-');
-            const [anoFim, mesFim] = fixoOrigem.fim.split('-');
-            const totalParcelas = (parseInt(anoFim) - parseInt(anoIni)) * 12 + (parseInt(mesFim) - parseInt(mesIni)) + 1;
-            const tMes = t.data.substring(0, 7);
-            const [anoT, mesT] = tMes.split('-');
-            const parcelaAtual = (parseInt(anoT) - parseInt(anoIni)) * 12 + (parseInt(mesT) - parseInt(mesIni)) + 1;
-            if (parcelaAtual > 0 && parcelaAtual <= totalParcelas) {
-                parcelaInfo = `<span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:2px;">Parcela ${parcelaAtual}/${totalParcelas}</span>`;
+            let parcelaInfo = "";
+            let fixoOrigem = t.gastoFixoId ? saidasFixas.find(g => g.id === t.gastoFixoId) : (t.entradaFixaId ? entradasFixas.find(g => g.id === t.entradaFixaId) : null);
+            if (fixoOrigem && fixoOrigem.fim) {
+                const [anoIni, mesIni] = fixoOrigem.inicio.split('-');
+                const [anoFim, mesFim] = fixoOrigem.fim.split('-');
+                const totalParcelas = (parseInt(anoFim) - parseInt(anoIni)) * 12 + (parseInt(mesFim) - parseInt(mesIni)) + 1;
+                const tMes = t.data.substring(0, 7);
+                const [anoT, mesT] = tMes.split('-');
+                const parcelaAtual = (parseInt(anoT) - parseInt(anoIni)) * 12 + (parseInt(mesT) - parseInt(mesIni)) + 1;
+                if (parcelaAtual > 0 && parcelaAtual <= totalParcelas) {
+                    parcelaInfo = `<span style="font-size:0.7rem; color:var(--text-muted); display:block; margin-top:1px;">${parcelaAtual}/${totalParcelas}</span>`;
+                }
             }
-        }
 
-        const catObj = categorias.find(c => c.nome === t.categoria);
-        const corCat = catObj ? catObj.cor : 'transparent';
-        const borderStyle = corCat !== 'transparent' ? `border-left: 4px solid ${corCat}; padding-left: 8px;` : '';
+            const catObj = categorias.find(c => c.nome === t.categoria);
+            const corCat = catObj ? catObj.cor : null;
+            const iconSistema = isCategoriaInvestimento(t.categoria) ? ' <i class="fa-solid fa-gem" style="color:var(--accent); margin-left:4px; font-size:0.75rem;" title="Categoria do Sistema"></i>' : '';
+            const catPill = corCat
+                ? `<span class="cat-pill" style="background:${corCat}18; color:var(--text-main);"><span class="cat-dot" style="background:${corCat};"></span>${t.categoria || '—'}${iconSistema}</span>`
+                : `<span style="color:var(--text-muted); font-size:0.82rem;">${t.categoria || '—'}${iconSistema}</span>`;
 
-        li.dataset.rawData = t.data;
-        li.dataset.rawDesc = t.descricao;
-        li.dataset.rawCat = t.categoria;
-        li.dataset.rawCartao = t.cartao || '';
-        li.dataset.rawValor = t.valor;
-        li.dataset.rawTipo = t.tipo;
-        li.dataset.rawStatus = tStatus;
+            li.dataset.rawData = t.data;
+            li.dataset.rawDesc = t.descricao;
+            li.dataset.rawOrigem = t.origem || '';
+            li.dataset.rawDetalhes = t.detalhes || '';
+            li.dataset.rawCat = t.categoria || '';
+            li.dataset.rawCartao = t.cartao || '';
+            li.dataset.rawValor = t.valor;
+            li.dataset.rawTipo = t.tipo;
+            li.dataset.rawStatus = tStatus;
+            if (t.docId) li.dataset.docId = t.docId;
+            if (t.entradaFixaId) li.dataset.entradaFixaId = t.entradaFixaId;
+            if (t.gastoFixoId) li.dataset.gastoFixoId = t.gastoFixoId;
+            if (t.isProjection) li.dataset.isProjection = 'true';
+            if (t.investimentoId) li.dataset.investimentoId = t.investimentoId;
 
-        li.innerHTML = `
-            <span class="col-num">${index + 1}</span>
-            <span data-label="Data" style="cursor:pointer" title="Clique para editar">${t.data.split('-').reverse().join('/')}</span>
-            <span data-label="Descrição" title="Clique para editar: ${descFinal}" style="cursor:pointer; display:flex; flex-direction:column; justify-content:center;">
-                <div style="display: flex; align-items: center; gap: 5px;">
-                    <span>${descFinal}</span>
-                    ${fixoOrigem ? '<i class="fa-solid fa-thumbtack" style="font-size: 0.7rem; color: var(--text-muted); transform: rotate(45deg);"></i>' : ''}
-                </div>
-                ${parcelaInfo}
-            </span>
-            <span data-label="Categoria" style="${borderStyle}; cursor:pointer" title="Clique para editar">
-                <div style="display: flex; align-items: center; gap: 5px;">
-                    <span>${t.categoria}</span>
-                    ${isCategoriaInvestimento(t.categoria) ? '<i class="fa-solid fa-thumbtack" style="font-size: 0.7rem; color: var(--accent); transform: rotate(45deg);"></i>' : ''}
-                </div>
-            </span>
-            <span data-label="Cartão" style="cursor:pointer" title="Clique para editar">${(!t.cartao || t.cartao === 'nenhum' || t.cartao === '-') ? 'Débito/pix/dinheiro' : t.cartao}</span>
-            <span data-label="Valor" class="${classeValor}" style="cursor:pointer" title="Clique para editar">${sinal} ${valorFormatado}</span>
-            <span data-label="Status" style="cursor:pointer" title="Clique para editar">${labelStatus}</span>
-            <span class="col-acoes">
-                <button class="btn-excluir" title="Excluir"><i class="fa-solid fa-trash"></i></button>
-            </span>
-        `;
-        listaTransacoes.appendChild(li);
-    });
-    atualizarResumo(transacoesFiltradas, navYYYYMM);
+            li.innerHTML = `
+                <span class="col-num">${index + 1}</span>
+                <span>${t.data.split('-').reverse().join('/')}</span>
+                <span style="display:flex; flex-direction:column; justify-content:center; gap:1px;">
+                    <span style="display:flex; align-items:center; gap:5px;">
+                        <span>${t.descricao}</span>
+                        ${fixoOrigem ? '<i class="fa-solid fa-thumbtack" style="font-size:0.65rem; color:var(--text-muted); transform:rotate(45deg); flex-shrink:0;"></i>' : ''}
+                    </span>
+                    ${t.origem || t.detalhes ? `<span style="font-size:0.75rem; color:var(--text-faint); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${t.origem ? 'Origem: '+t.origem : ''}${t.origem && t.detalhes ? ' | ' : ''}${t.detalhes || ''}">${t.origem ? t.origem + (t.detalhes ? ' - ' : '') : ''}${t.detalhes || ''}</span>` : ''}
+                    ${parcelaInfo}
+                </span>
+                <span>${catPill}</span>
+                <span style="color:var(--text-muted); font-size:0.82rem;">${(!t.cartao || t.cartao === 'nenhum' || t.cartao === '-') ? 'Débito/pix/dinheiro' : t.cartao}</span>
+                <span class="col-valor ${t.tipo === 'entrada' ? 'entrada' : 'saida'}">${sinal} ${valorFormatado}</span>
+                <span>${labelStatus}</span>
+                <span class="col-acoes">
+                    <button class="btn-excluir" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                </span>
+            `;
+            listaTransacoes.appendChild(li);
+        });
+    }
+
+    atualizarResumo(transacoesFiltradas, navYYYYMM, todasTransacoes.filter(t => t.data.startsWith(prefixoData)));
 }
 
+// --- Filter Listeners ---
 toggleSimulacao.addEventListener('change', () => { localStorage.setItem('verSimulacoes', toggleSimulacao.checked); renderizarLista(); });
 filtroCategoria.addEventListener('change', renderizarLista);
 filtroCartao.addEventListener('change', renderizarLista);
 filtroBusca.addEventListener('input', renderizarLista);
+const buscaEntradasFixas = document.getElementById('busca-entradas-fixas');
+const buscaSaidasFixas = document.getElementById('busca-saidas-fixas');
+if(buscaEntradasFixas) buscaEntradasFixas.addEventListener('input', (e) => renderizarListaEntradasFixas(e.target.value));
+if(buscaSaidasFixas) buscaSaidasFixas.addEventListener('input', (e) => renderizarListaSaidasFixas(e.target.value));
+
 filtroTipo.addEventListener('change', () => { atualizarFiltroCategorias(); renderizarLista(); });
-document.getElementById('btn-limpar-filtros').addEventListener('click', () => {
+document.getElementById('btn-limpar-filtros').addEventListener('click', (e) => {
+    e.currentTarget.classList.add('anim-destroy');
+    setTimeout(() => e.currentTarget.classList.remove('anim-destroy'), 400);
     filtroBusca.value = ''; filtroTipo.value = ''; filtroCategoria.value = ''; filtroCartao.value = ''; filtroStatus.value = '';
     atualizarFiltroCategorias(); renderizarLista();
 });
 filtroStatus.addEventListener('change', (e) => {
-    if (e.target.value === 'prevista' || e.target.value === 'simulacao') toggleSimulacao.checked = true;
+    if (e.target.value === 'prevista' || e.target.value === 'simulacao') {
+        toggleSimulacao.checked = true;
+        localStorage.setItem('verSimulacoes', 'true');
+    }
     renderizarLista();
 });
 
+window.alternarStatusRapido = async (id, statusAtual, docId) => {
+    if (!userIdLogado) return;
+    if (id.startsWith('proj_')) {
+        alert("Não é possível alterar o status de um lançamento projetado. Salve-o primeiro.");
+        return;
+    }
+    const incluirSimulacoes = toggleSimulacao.checked;
+    let novoStatus;
+    if (incluirSimulacoes) {
+        if (statusAtual === 'prevista') novoStatus = 'realizada';
+        else if (statusAtual === 'realizada') novoStatus = 'simulacao';
+        else novoStatus = 'prevista';
+    } else {
+        if (statusAtual === 'prevista') novoStatus = 'realizada';
+        else novoStatus = 'prevista';
+    }
+
+    if (!docId) return;
+    try {
+        const docRef = doc(window.db, "dados_mensais", docId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            let arr = docSnap.data().transacoes || [];
+            const idx = arr.findIndex(tx => tx.id === id);
+            if (idx !== -1) {
+                arr[idx].status = novoStatus;
+                await updateDoc(docRef, { transacoes: arr });
+            }
+        }
+    } catch (error) {
+        console.error("Erro ao alterar status:", error);
+    }
+};
+
+// --- Row Click: open Edit Modal ---
 listaTransacoes.addEventListener('click', async (e) => {
     const btnExcluir = e.target.closest('.btn-excluir');
-    const spanEditavel = e.target.closest('span[data-label]');
     const li = e.target.closest('li');
-
-    if (!li) return;
+    if (!li || li.classList.contains('empty-state')) return;
     const idTransacao = li.getAttribute('data-id');
 
     if (btnExcluir) {
@@ -1076,12 +1256,11 @@ listaTransacoes.addEventListener('click', async (e) => {
         const transacaoOriginal = transacoes.find(t => t.id === idTransacao);
         const isFixoSalvo = transacaoOriginal && (transacaoOriginal.entradaFixaId || transacaoOriginal.gastoFixoId);
 
-        // ATUALIZADO PARA ARRAYS
         const deletarComum = async () => {
-            if(transacaoOriginal && transacaoOriginal.docId) {
+            if (transacaoOriginal && transacaoOriginal.docId) {
                 const docRef = doc(window.db, "dados_mensais", transacaoOriginal.docId);
                 const docSnap = await getDoc(docRef);
-                if(docSnap.exists()) {
+                if (docSnap.exists()) {
                     let arr = docSnap.data().transacoes || [];
                     arr = arr.filter(t => t.id !== idTransacao);
                     await updateDoc(docRef, { transacoes: arr });
@@ -1096,27 +1275,18 @@ listaTransacoes.addEventListener('click', async (e) => {
                 const isEntrada = idTransacao.startsWith('proje_');
                 const fixoId = idTransacao.split('_')[1];
                 const idExclusao = Date.now().toString(36) + Math.random().toString(36).substr(2);
-                const novosDados = {
-                    id: idExclusao, status: 'excluida', criadoEm: new Date().toISOString(),
-                    data: `${mesAcao}-01`, valor: 0, descricao: 'Excluída', userId: userIdLogado
-                };
+                const novosDados = { id: idExclusao, status: 'excluida', criadoEm: new Date().toISOString(), data: `${mesAcao}-01`, valor: 0, descricao: 'Excluída', userId: userIdLogado };
                 if (isEntrada) novosDados.entradaFixaId = fixoId;
                 else novosDados.gastoFixoId = fixoId;
-
-                await setDoc(doc(window.db, "dados_mensais", docId), {
-                    userId: userIdLogado, mes: mesAcao, transacoes: arrayUnion(novosDados)
-                }, { merge: true });
+                await setDoc(doc(window.db, "dados_mensais", docId), { userId: userIdLogado, mes: mesAcao, transacoes: arrayUnion(novosDados) }, { merge: true });
             } else {
-                if(transacaoOriginal && transacaoOriginal.docId) {
+                if (transacaoOriginal && transacaoOriginal.docId) {
                     const docRef = doc(window.db, "dados_mensais", transacaoOriginal.docId);
                     const docSnap = await getDoc(docRef);
-                    if(docSnap.exists()) {
+                    if (docSnap.exists()) {
                         let arr = docSnap.data().transacoes || [];
                         const idx = arr.findIndex(x => x.id === idTransacao);
-                        if(idx !== -1) {
-                            arr[idx].status = 'excluida';
-                            await updateDoc(docRef, { transacoes: arr });
-                        }
+                        if (idx !== -1) { arr[idx].status = 'excluida'; await updateDoc(docRef, { transacoes: arr }); }
                     }
                 }
             }
@@ -1136,244 +1306,54 @@ listaTransacoes.addEventListener('click', async (e) => {
                 btnCancelar.replaceWith(btnCancelar.cloneNode(true));
                 btnFechar.replaceWith(btnFechar.cloneNode(true));
             };
-            btnConfirmar.onclick = async () => { limparModal(); await deletarFixoDesteMes(); };
-            btnCancelar.onclick = limparModal;
-            btnFechar.onclick = limparModal;
+            document.getElementById('btn-confirmar-edicao-fixo').onclick = async () => { limparModal(); await deletarFixoDesteMes(); };
+            document.getElementById('btn-cancelar-edicao-fixo').onclick = limparModal;
+            document.getElementById('fechar-modal-aviso').onclick = limparModal;
         } else {
             confirmarAcao("Excluir Lançamento", "Tem certeza que deseja excluir esta transação?", deletarComum);
         }
         return;
     }
 
-    if (spanEditavel && !li.classList.contains('editando') && !btnExcluir) {
-        const tData = li.dataset.rawData;
-        const tDesc = li.dataset.rawDesc;
-        const tCat = li.dataset.rawCat;
-        const tCartao = li.dataset.rawCartao;
-        const tValorRaw = li.dataset.rawValor;
-        const tTipo = li.dataset.rawTipo;
-        const tStatus = li.dataset.rawStatus;
-
-        li.classList.add('editando');
-
-        const catOrdenadas = [...categorias].sort((a, b) => a.nome.localeCompare(b.nome));
-        const catFiltradas = catOrdenadas.filter(c => !c.tipo || c.tipo === 'ambas' || c.tipo === tTipo);
-        const optsCat = gerarOptionsSelect(catFiltradas, tCat);
-        const optsCartoes = `<option value="">Nenhum</option>` + gerarOptionsSelect(cartoes, tCartao);
-        const tNum = li.querySelector('.col-num') ? li.querySelector('.col-num').innerText : '';
-
-        li.innerHTML = `
-            <span class="col-num">${tNum}</span>
-            <input type="date" class="edit-data">
-            <input type="text" class="edit-desc">
-            <select class="edit-cat">${optsCat}</select>
-            <select class="edit-cartao">${optsCartoes}</select>
-            <div class="valor-input-group">
-                <select class="edit-tipo" onchange="this.style.color = this.value === 'entrada' ? 'var(--success)' : 'var(--danger)'">
-                    <option value="saida">-</option>
-                    <option value="entrada">+</option>
-                </select>
-                <input type="number" step="0.01" class="edit-valor">
-            </div>
-            <select class="edit-status">
-                <option value="realizada">Realizada</option>
-                <option value="prevista">Previsto</option>
-                <option value="simulacao">Simulação</option>
-            </select>
-            <div class="col-acoes">
-                <button class="btn-excluir" title="Excluir"><i class="fa-solid fa-trash"></i></button>
-            </div>
-        `;
-
-        li.querySelector('.edit-data').value = tData;
-        li.querySelector('.edit-desc').value = tDesc;
-        const catSelect = li.querySelector('.edit-cat');
-        if (tCat && !Array.from(catSelect.options).some(o => o.value === tCat)) {
-            const opt = document.createElement('option'); opt.value = tCat; opt.text = tCat; catSelect.add(opt);
-        }
-        catSelect.value = tCat || '';
-
-        const cartaoSelect = li.querySelector('.edit-cartao');
-        if (tCartao && !Array.from(cartaoSelect.options).some(o => o.value === tCartao)) {
-            const opt = document.createElement('option'); opt.value = tCartao; opt.text = tCartao; cartaoSelect.add(opt);
-        }
-        cartaoSelect.value = tCartao || '';
-
-        li.querySelector('.edit-tipo').value = tTipo;
-        li.querySelector('.edit-valor').value = parseFloat(tValorRaw);
-        li.querySelector('.edit-status').value = tStatus;
-        li.querySelector('.edit-tipo').dispatchEvent(new Event('change'));
-
-        const clickedLabel = spanEditavel.getAttribute('data-label');
-        if (clickedLabel === 'Data') li.querySelector('.edit-data').focus();
-        else if (clickedLabel === 'Descrição') li.querySelector('.edit-desc').focus();
-        else if (clickedLabel === 'Categoria') li.querySelector('.edit-cat').focus();
-        else if (clickedLabel === 'Cartão') li.querySelector('.edit-cartao').focus();
-        else if (clickedLabel === 'Valor') li.querySelector('.edit-valor').focus();
-        else if (clickedLabel === 'Status') li.querySelector('.edit-status').focus();
-
-        const handleSave = async () => {
-            if (li.dataset.saving === 'true') return;
-            li.dataset.saving = 'true';
-
-            const novosDados = {
-                data: li.querySelector('.edit-data').value,
-                descricao: li.querySelector('.edit-desc').value,
-                categoria: li.querySelector('.edit-cat').value,
-                cartao: li.querySelector('.edit-cartao').value,
-                tipo: li.querySelector('.edit-tipo').value,
-                valor: parseFloat(li.querySelector('.edit-valor').value),
-                status: li.querySelector('.edit-status').value
-            };
-
-            const mudouQualquerCoisa = String(novosDados.descricao).trim() !== String(li.dataset.rawDesc).trim() || String(novosDados.categoria).trim() !== String(li.dataset.rawCat).trim() || String(novosDados.cartao).trim() !== String(li.dataset.rawCartao).trim() || parseFloat(novosDados.valor) !== parseFloat(li.dataset.rawValor) || String(novosDados.data).trim() !== String(li.dataset.rawData).trim() || String(novosDados.tipo).trim() !== String(li.dataset.rawTipo).trim() || String(novosDados.status).trim() !== String(li.dataset.rawStatus).trim();
-
-            if (!mudouQualquerCoisa) {
-                li.dataset.saving = 'false'; renderizarLista(); return;
-            }
-
-            const mudouAlgoAlemDoStatus = String(novosDados.descricao).trim() !== String(li.dataset.rawDesc).trim() || String(novosDados.categoria).trim() !== String(li.dataset.rawCat).trim() || String(novosDados.cartao).trim() !== String(li.dataset.rawCartao).trim() || parseFloat(novosDados.valor) !== parseFloat(li.dataset.rawValor) || String(novosDados.data).trim() !== String(li.dataset.rawData).trim() || String(novosDados.tipo).trim() !== String(li.dataset.rawTipo).trim();
-
-            const isProjecao = idTransacao.startsWith('proj');
-            const transacaoOriginal = transacoes.find(t => t.id === idTransacao);
-            const isFixoSalvo = transacaoOriginal && (transacaoOriginal.entradaFixaId || transacaoOriginal.gastoFixoId);
-
-            const executarSalvamentoComVinculo = async () => {
-                const catLower = novosDados.categoria.toLowerCase();
-                const catTriggerInvest = catLower.includes('poupança e investimentos') || catLower.includes('resgate');
-                
-                const finalizar = async (investId = null) => {
-                    const novoId = isProjecao ? Date.now().toString(36) + Math.random().toString(36).substr(2) : idTransacao;
-                    const tFinal = { id: novoId, ...novosDados };
-                    
-                    if (investId) {
-                        tFinal.investimentoId = investId;
-                        const sinal = tFinal.categoria.toLowerCase().includes('resgate') ? -1 : 1;
-                        if (window.atualizarSaldoInvestimento) {
-                            await window.atualizarSaldoInvestimento(investId, tFinal.valor * sinal);
-                        }
-                    }
-
-                    if (isProjecao) {
-                        const isEntrada = idTransacao.startsWith('proje_');
-                        const fixoId = idTransacao.split('_')[1];
-                        if (isEntrada) tFinal.entradaFixaId = fixoId;
-                        else tFinal.gastoFixoId = fixoId;
-                        tFinal.criadoEm = new Date().toISOString();
-                        tFinal.userId = userIdLogado;
-
-                        const mesTransacao = tFinal.data.substring(0, 7);
-                        const docId = `${userIdLogado}_${mesTransacao}`;
-                        await setDoc(doc(window.db, "dados_mensais", docId), {
-                            userId: userIdLogado, mes: mesTransacao, transacoes: arrayUnion(tFinal)
-                        }, { merge: true });
-                    } else {
-                        const oldMes = transacaoOriginal.data.substring(0, 7);
-                        const newMes = tFinal.data.substring(0, 7);
-                        
-                        if (oldMes === newMes) {
-                            const docRef = doc(window.db, "dados_mensais", transacaoOriginal.docId);
-                            const docSnap = await getDoc(docRef);
-                            if(docSnap.exists()) {
-                                let arr = docSnap.data().transacoes || [];
-                                const idx = arr.findIndex(x => x.id === idTransacao);
-                                if(idx !== -1) {
-                                    arr[idx] = { ...arr[idx], ...novosDados };
-                                    if (investId) arr[idx].investimentoId = investId;
-                                    await updateDoc(docRef, { transacoes: arr });
-                                }
-                            }
-                        } else {
-                            const oldDocRef = doc(window.db, "dados_mensais", transacaoOriginal.docId);
-                            const oldSnap = await getDoc(oldDocRef);
-                            let objToMove = null;
-                            if(oldSnap.exists()) {
-                                let arr = oldSnap.data().transacoes || [];
-                                objToMove = arr.find(x => x.id === idTransacao);
-                                arr = arr.filter(x => x.id !== idTransacao);
-                                await updateDoc(oldDocRef, { transacoes: arr });
-                            }
-                            if(objToMove) {
-                                const newDocId = `${userIdLogado}_${newMes}`;
-                                const tNova = { ...objToMove, ...novosDados };
-                                if (investId) tNova.investimentoId = investId;
-                                await setDoc(doc(window.db, "dados_mensais", newDocId), {
-                                    userId: userIdLogado, mes: newMes, transacoes: arrayUnion(tNova)
-                                }, { merge: true });
-                            }
-                        }
-                    }
-                    li.dataset.saving = 'false'; renderizarLista();
-                };
-
-                if (catTriggerInvest && !transacaoOriginal.investimentoId) {
-                    solicitarVinculoInvestimento(novosDados.categoria, finalizar);
-                } else {
-                    await finalizar();
-                }
-            };
-
-            if ((isProjecao || isFixoSalvo) && mudouAlgoAlemDoStatus) {
-                const modalAviso = document.getElementById('modal-aviso-edicao-fixo');
-                document.getElementById('aviso-edicao-titulo').innerText = 'Aviso de Edição';
-                document.getElementById('aviso-edicao-texto').innerHTML = 'Você está alterando uma receita/despesa fixa na planilha. Esta modificação será aplicada <strong>apenas neste mês específico</strong>.<br><br>Para alterar para todos os meses futuros de forma definitiva, cancele esta ação e faça a alteração através das Configurações (⚙️).';
-                modalAviso.style.display = 'flex';
-
-                const btnConfirmar = document.getElementById('btn-confirmar-edicao-fixo');
-                const btnCancelar = document.getElementById('btn-cancelar-edicao-fixo');
-                const btnFechar = document.getElementById('fechar-modal-aviso');
-
-                const limparModal = () => {
-                    modalAviso.style.display = 'none';
-                    btnConfirmar.replaceWith(btnConfirmar.cloneNode(true));
-                    btnCancelar.replaceWith(btnCancelar.cloneNode(true));
-                    btnFechar.replaceWith(btnFechar.cloneNode(true));
-                };
-
-                document.getElementById('btn-confirmar-edicao-fixo').addEventListener('click', async () => {
-                    limparModal(); await executarSalvamentoComVinculo();
-                });
-                document.getElementById('btn-cancelar-edicao-fixo').addEventListener('click', () => {
-                    limparModal(); li.dataset.saving = 'false'; renderizarLista();
-                });
-                document.getElementById('fechar-modal-aviso').addEventListener('click', () => {
-                    limparModal(); li.dataset.saving = 'false'; renderizarLista();
-                });
-            } else {
-                try {
-                    await executarSalvamentoComVinculo();
-                } catch (err) {
-                    console.error("Erro ao salvar:", err); alert("Erro ao salvar alterações.");
-                    li.dataset.saving = 'false'; renderizarLista();
-                }
-            }
-        };
-
-        li.addEventListener('focusout', (e) => {
-            setTimeout(() => {
-                if (!li.contains(document.activeElement) && document.getElementById('modal-aviso-edicao-fixo').style.display !== 'flex') {
-                    handleSave();
-                }
-            }, 10);
-        });
-        li.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); document.activeElement.blur(); }
-        });
-    }
+    // Open edit modal
+    abrirModalEditar(li);
 });
 
-// --- Inserção Rápida (ATUALIZADO PARA ARRAYS) ---
-formInline.addEventListener('submit', async (e) => {
+// --- MODAL: NOVO LANÇAMENTO ---
+const btnAbrirModalLancamento = document.getElementById('btn-abrir-modal-lancamento');
+const modalLancamento = document.getElementById('modal-lancamento');
+const formModalLancamento = document.getElementById('form-modal-lancamento');
+
+btnAbrirModalLancamento.addEventListener('click', () => {
+    popularModalSelects();
+    document.getElementById('modal-data').value = new Date().toISOString().split('T')[0];
+    document.getElementById('modal-desc').value = '';
+    document.getElementById('modal-valor').value = '';
+    document.getElementById('modal-tipo').value = 'saida';
+    document.getElementById('modal-status').value = 'prevista';
+    document.getElementById('modal-categoria').value = '';
+    document.getElementById('modal-cartao').value = '';
+    document.getElementById('modal-lancamento-titulo').innerHTML = '<i class="fa-solid fa-plus-circle"></i> Novo Lançamento';
+    modalLancamento.style.display = 'flex';
+    setTimeout(() => document.getElementById('modal-desc').focus(), 100);
+});
+
+document.getElementById('fechar-modal-lancamento').addEventListener('click', () => { modalLancamento.style.display = 'none'; });
+document.getElementById('btn-cancelar-lancamento').addEventListener('click', () => { modalLancamento.style.display = 'none'; });
+
+formModalLancamento.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!userIdLogado) return;
 
-    const dataValue = document.getElementById('in-data').value;
-    const descValue = document.getElementById('in-desc').value;
-    const valorValue = parseFloat(document.getElementById('in-valor').value);
-    const catValue = document.getElementById('in-categoria').value;
-    const tipoValue = document.getElementById('in-tipo').value;
-    const cartaoValue = document.getElementById('in-cartao').value;
-    const statusValue = document.getElementById('in-status').value;
+    const dataValue = document.getElementById('modal-data').value;
+    const descValue = document.getElementById('modal-desc').value;
+    const valorValue = parseFloat(document.getElementById('modal-valor').value);
+    const catValue = document.getElementById('modal-categoria').value;
+    const tipoValue = document.getElementById('modal-tipo').value;
+    const cartaoValue = document.getElementById('modal-cartao').value;
+    const statusValue = document.getElementById('modal-status').value;
+
+    if (!dataValue || !descValue || isNaN(valorValue)) return;
 
     const tFinal = {
         id: Date.now().toString(36) + Math.random().toString(36).substr(2),
@@ -1391,35 +1371,275 @@ formInline.addEventListener('submit', async (e) => {
     const catLower = catValue.toLowerCase();
     const catTriggerInvest = catLower.includes('poupança e investimentos') || catLower.includes('resgate');
 
-    const salvarTransacao = async (investId = null) => {
+    const salvar = async (investId = null) => {
         if (investId) {
             tFinal.investimentoId = investId;
             const sinal = catLower.includes('resgate') ? -1 : 1;
-            if (window.atualizarSaldoInvestimento) {
-                await window.atualizarSaldoInvestimento(investId, tFinal.valor * sinal);
-            }
+            if (window.atualizarSaldoInvestimento) await window.atualizarSaldoInvestimento(investId, tFinal.valor * sinal);
         }
-
         const mesTransacao = tFinal.data.substring(0, 7);
         const docId = `${userIdLogado}_${mesTransacao}`;
-        await setDoc(doc(window.db, "dados_mensais", docId), {
-            userId: userIdLogado, mes: mesTransacao, transacoes: arrayUnion(tFinal)
-        }, { merge: true });
-
-        formInline.reset();
-        if (typeof configurarDataPadrao === 'function') configurarDataPadrao();
-        else document.getElementById('in-data').value = new Date().toISOString().split('T')[0];
+        await setDoc(doc(window.db, "dados_mensais", docId), { userId: userIdLogado, mes: mesTransacao, transacoes: arrayUnion(tFinal) }, { merge: true });
+        modalLancamento.style.display = 'none';
+        configurarDataPadrao();
         renderizarLista();
     };
 
     if (catTriggerInvest) {
-        solicitarVinculoInvestimento(catValue, salvarTransacao);
+        solicitarVinculoInvestimento(catValue, salvar);
     } else {
-        await salvarTransacao();
+        await salvar();
     }
 });
 
-// --- Firebase Sync com Filtros do Usuário (ATUALIZADO PARA ARRAYS) ---
+// --- MODAL: EDITAR LANÇAMENTO ---
+const modalEditar = document.getElementById('modal-editar-lancamento');
+const formEditar = document.getElementById('form-editar-lancamento');
+
+function abrirModalEditar(li) {
+    popularModalSelects();
+
+    const idTransacao = li.getAttribute('data-id');
+    const tData = li.dataset.rawData;
+    const tDesc = li.dataset.rawDesc;
+    const tCat = li.dataset.rawCat;
+    const tCartao = li.dataset.rawCartao;
+    const tValor = li.dataset.rawValor;
+    const tTipo = li.dataset.rawTipo;
+    const tStatus = li.dataset.rawStatus;
+    const docId = li.dataset.docId || '';
+    const entradaFixaId = li.dataset.entradaFixaId || '';
+    const gastoFixoId = li.dataset.gastoFixoId || '';
+    const isProjection = li.dataset.isProjection === 'true';
+
+    document.getElementById('editar-id').value = idTransacao;
+    document.getElementById('editar-doc-id').value = docId;
+    document.getElementById('editar-fixo-type').value = entradaFixaId ? 'entrada' : (gastoFixoId ? 'saida' : '');
+    document.getElementById('editar-fixo-id').value = entradaFixaId || gastoFixoId || '';
+
+    document.getElementById('editar-data').value = tData;
+    document.getElementById('editar-desc').value = tDesc;
+    document.getElementById('editar-origem').value = li.dataset.rawOrigem || '';
+    document.getElementById('editar-detalhes').value = li.dataset.rawDetalhes || '';
+    document.getElementById('editar-valor').value = tValor;
+    document.getElementById('editar-tipo').value = tTipo;
+    document.getElementById('editar-status').value = tStatus;
+
+    // Set categoria, add if not found
+    const catSel = document.getElementById('editar-categoria');
+    if (tCat && !Array.from(catSel.options).some(o => o.value === tCat)) {
+        catSel.appendChild(new Option(tCat, tCat));
+    }
+    catSel.value = tCat || '';
+
+    // Set cartao, add if not found
+    const cartaoSel = document.getElementById('editar-cartao');
+    if (tCartao && !Array.from(cartaoSel.options).some(o => o.value === tCartao)) {
+        cartaoSel.appendChild(new Option(tCartao, tCartao));
+    }
+    cartaoSel.value = tCartao || '';
+
+    modalEditar.style.display = 'flex';
+    setTimeout(() => document.getElementById('editar-desc').focus(), 100);
+}
+
+document.getElementById('fechar-modal-editar').addEventListener('click', () => { modalEditar.style.display = 'none'; });
+document.getElementById('btn-cancelar-editar').addEventListener('click', () => { modalEditar.style.display = 'none'; });
+
+// Delete button inside edit modal
+document.getElementById('btn-excluir-do-modal').addEventListener('click', async () => {
+    const idTransacao = document.getElementById('editar-id').value;
+    const docId = document.getElementById('editar-doc-id').value;
+    const fixoType = document.getElementById('editar-fixo-type').value;
+    const fixoId = document.getElementById('editar-fixo-id').value;
+    const isProjecao = idTransacao.startsWith('proj');
+    const transacaoOriginal = transacoes.find(t => t.id === idTransacao);
+    const isFixoSalvo = (transacaoOriginal && (transacaoOriginal.entradaFixaId || transacaoOriginal.gastoFixoId)) || !!fixoId;
+
+    modalEditar.style.display = 'none';
+
+    const deletarComum = async () => {
+        if (docId) {
+            const docRef = doc(window.db, "dados_mensais", docId);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                let arr = docSnap.data().transacoes || [];
+                arr = arr.filter(t => t.id !== idTransacao);
+                await updateDoc(docRef, { transacoes: arr });
+            }
+        }
+    };
+
+    const deletarFixoDesteMes = async () => {
+        const mesAcao = `${dataNavegacao.getFullYear()}-${String(dataNavegacao.getMonth() + 1).padStart(2, '0')}`;
+        const dId = `${userIdLogado}_${mesAcao}`;
+        if (isProjecao) {
+            const isEntrada = idTransacao.startsWith('proje_');
+            const fId = idTransacao.split('_')[1];
+            const idExclusao = Date.now().toString(36) + Math.random().toString(36).substr(2);
+            const novosDados = { id: idExclusao, status: 'excluida', criadoEm: new Date().toISOString(), data: `${mesAcao}-01`, valor: 0, descricao: 'Excluída', userId: userIdLogado };
+            if (isEntrada) novosDados.entradaFixaId = fId; else novosDados.gastoFixoId = fId;
+            await setDoc(doc(window.db, "dados_mensais", dId), { userId: userIdLogado, mes: mesAcao, transacoes: arrayUnion(novosDados) }, { merge: true });
+        } else {
+            if (docId) {
+                const docRef = doc(window.db, "dados_mensais", docId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    let arr = docSnap.data().transacoes || [];
+                    const idx = arr.findIndex(x => x.id === idTransacao);
+                    if (idx !== -1) { arr[idx].status = 'excluida'; await updateDoc(docRef, { transacoes: arr }); }
+                }
+            }
+        }
+    };
+
+    if (isProjecao || isFixoSalvo) {
+        const modalAviso = document.getElementById('modal-aviso-edicao-fixo');
+        document.getElementById('aviso-edicao-titulo').innerText = 'Aviso de Exclusão';
+        document.getElementById('aviso-edicao-texto').innerHTML = 'Você está excluindo uma ocorrência de um valor fixo. Esta modificação será aplicada <strong>apenas neste mês específico</strong>.<br><br>Para excluí-lo definitivamente, use as Configurações (⚙️).';
+        modalAviso.style.display = 'flex';
+        const btnC = document.getElementById('btn-confirmar-edicao-fixo');
+        const btnX = document.getElementById('btn-cancelar-edicao-fixo');
+        const btnF = document.getElementById('fechar-modal-aviso');
+        const limpar = () => {
+            modalAviso.style.display = 'none';
+            btnC.replaceWith(btnC.cloneNode(true));
+            btnX.replaceWith(btnX.cloneNode(true));
+            btnF.replaceWith(btnF.cloneNode(true));
+        };
+        document.getElementById('btn-confirmar-edicao-fixo').onclick = async () => { limpar(); await deletarFixoDesteMes(); };
+        document.getElementById('btn-cancelar-edicao-fixo').onclick = limpar;
+        document.getElementById('fechar-modal-aviso').onclick = limpar;
+    } else {
+        confirmarAcao("Excluir Lançamento", "Tem certeza que deseja excluir esta transação?", deletarComum);
+    }
+});
+
+formEditar.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const idTransacao = document.getElementById('editar-id').value;
+    const docId = document.getElementById('editar-doc-id').value;
+    const fixoId = document.getElementById('editar-fixo-id').value;
+    const fixoType = document.getElementById('editar-fixo-type').value;
+    const isProjecao = idTransacao.startsWith('proj');
+    const transacaoOriginal = transacoes.find(t => t.id === idTransacao);
+    const isFixoSalvo = (transacaoOriginal && (transacaoOriginal.entradaFixaId || transacaoOriginal.gastoFixoId)) || !!fixoId;
+
+    const novosDados = {
+        data: document.getElementById('editar-data').value,
+        descricao: document.getElementById('editar-desc').value,
+        origem: document.getElementById('editar-origem').value.trim(),
+        detalhes: document.getElementById('editar-detalhes').value.trim(),
+        categoria: document.getElementById('editar-categoria').value,
+        cartao: document.getElementById('editar-cartao').value,
+        tipo: document.getElementById('editar-tipo').value,
+        valor: parseFloat(document.getElementById('editar-valor').value),
+        status: document.getElementById('editar-status').value
+    };
+
+    const mudouStatus = transacaoOriginal && String(novosDados.status) !== String(normalizarStatus(transacaoOriginal));
+    const mudouAlgoAlemDoStatus = transacaoOriginal && (
+        String(novosDados.descricao).trim() !== String(transacaoOriginal.descricao || '').trim() ||
+        String(novosDados.categoria) !== String(transacaoOriginal.categoria || '') ||
+        String(novosDados.cartao) !== String(transacaoOriginal.cartao || '') ||
+        parseFloat(novosDados.valor) !== parseFloat(transacaoOriginal.valor) ||
+        String(novosDados.data) !== String(transacaoOriginal.data) ||
+        String(novosDados.tipo) !== String(transacaoOriginal.tipo)
+    );
+
+    const executarSalvamento = async () => {
+        const catLower = novosDados.categoria.toLowerCase();
+        const catTriggerInvest = (catLower.includes('poupança e investimentos') || catLower.includes('resgate')) && transacaoOriginal && !transacaoOriginal.investimentoId;
+
+        const finalizar = async (investId = null) => {
+            const novoId = isProjecao ? Date.now().toString(36) + Math.random().toString(36).substr(2) : idTransacao;
+            const tFinal = { id: novoId, ...novosDados };
+
+            if (investId) {
+                tFinal.investimentoId = investId;
+                const sinal = tFinal.categoria.toLowerCase().includes('resgate') ? -1 : 1;
+                if (window.atualizarSaldoInvestimento) await window.atualizarSaldoInvestimento(investId, tFinal.valor * sinal);
+            }
+
+            if (isProjecao) {
+                const isEntrada = idTransacao.startsWith('proje_');
+                const fxId = idTransacao.split('_')[1];
+                if (isEntrada) tFinal.entradaFixaId = fxId; else tFinal.gastoFixoId = fxId;
+                tFinal.criadoEm = new Date().toISOString();
+                tFinal.userId = userIdLogado;
+                const mesTransacao = tFinal.data.substring(0, 7);
+                const dId = `${userIdLogado}_${mesTransacao}`;
+                await setDoc(doc(window.db, "dados_mensais", dId), { userId: userIdLogado, mes: mesTransacao, transacoes: arrayUnion(tFinal) }, { merge: true });
+            } else if (docId) {
+                const oldMes = transacaoOriginal.data.substring(0, 7);
+                const newMes = tFinal.data.substring(0, 7);
+
+                if (oldMes === newMes) {
+                    const docRef = doc(window.db, "dados_mensais", docId);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        let arr = docSnap.data().transacoes || [];
+                        const idx = arr.findIndex(x => x.id === idTransacao);
+                        if (idx !== -1) {
+                            arr[idx] = { ...arr[idx], ...novosDados };
+                            if (investId) arr[idx].investimentoId = investId;
+                            await updateDoc(docRef, { transacoes: arr });
+                        }
+                    }
+                } else {
+                    const oldDocRef = doc(window.db, "dados_mensais", docId);
+                    const oldSnap = await getDoc(oldDocRef);
+                    let objToMove = null;
+                    if (oldSnap.exists()) {
+                        let arr = oldSnap.data().transacoes || [];
+                        objToMove = arr.find(x => x.id === idTransacao);
+                        arr = arr.filter(x => x.id !== idTransacao);
+                        await updateDoc(oldDocRef, { transacoes: arr });
+                    }
+                    if (objToMove) {
+                        const newDocId = `${userIdLogado}_${newMes}`;
+                        const tNova = { ...objToMove, ...novosDados };
+                        if (investId) tNova.investimentoId = investId;
+                        await setDoc(doc(window.db, "dados_mensais", newDocId), { userId: userIdLogado, mes: newMes, transacoes: arrayUnion(tNova) }, { merge: true });
+                    }
+                }
+            }
+            modalEditar.style.display = 'none';
+            renderizarLista();
+        };
+
+        if (catTriggerInvest) {
+            solicitarVinculoInvestimento(novosDados.categoria, finalizar);
+        } else {
+            await finalizar();
+        }
+    };
+
+    if ((isProjecao || isFixoSalvo) && mudouAlgoAlemDoStatus) {
+        modalEditar.style.display = 'none';
+        const modalAviso = document.getElementById('modal-aviso-edicao-fixo');
+        document.getElementById('aviso-edicao-titulo').innerText = 'Aviso de Edição';
+        document.getElementById('aviso-edicao-texto').innerHTML = 'Você está alterando uma receita/despesa fixa. Esta modificação será aplicada <strong>apenas neste mês específico</strong>.<br><br>Para alterar todos os meses futuros, use as Configurações (⚙️).';
+        modalAviso.style.display = 'flex';
+        const btnC = document.getElementById('btn-confirmar-edicao-fixo');
+        const btnX = document.getElementById('btn-cancelar-edicao-fixo');
+        const btnF = document.getElementById('fechar-modal-aviso');
+        const limpar = () => {
+            modalAviso.style.display = 'none';
+            btnC.replaceWith(btnC.cloneNode(true));
+            btnX.replaceWith(btnX.cloneNode(true));
+            btnF.replaceWith(btnF.cloneNode(true));
+        };
+        document.getElementById('btn-confirmar-edicao-fixo').addEventListener('click', async () => { limpar(); await executarSalvamento(); });
+        document.getElementById('btn-cancelar-edicao-fixo').addEventListener('click', () => { limpar(); renderizarLista(); });
+        document.getElementById('fechar-modal-aviso').addEventListener('click', () => { limpar(); renderizarLista(); });
+    } else {
+        try { await executarSalvamento(); } catch (err) { console.error("Erro ao salvar:", err); }
+    }
+});
+
+// --- Firebase Sync ---
 function inicializarSincronizacao() {
     if (!window.db || !userIdLogado) return;
     limparSincronizacao();
@@ -1430,7 +1650,6 @@ function inicializarSincronizacao() {
         snapshot.forEach((docSnap) => {
             const dados = docSnap.data();
             if (dados.transacoes && Array.isArray(dados.transacoes)) {
-                // Injeta o ID do documento do mês para a gente saber de qual "gaveta" deletar depois
                 const transacoesDesteMes = dados.transacoes.map(t => ({...t, docId: docSnap.id}));
                 transacoes.push(...transacoesDesteMes);
             }
@@ -1469,14 +1688,13 @@ function inicializarSincronizacao() {
         saidasFixas = [];
         snapshot.forEach((doc) => saidasFixas.push({ id: doc.id, ...doc.data() }));
         renderizarListaSaidasFixas();
+        renderizarLista();
     }));
 }
 
-// --- Lógica de Vínculo com Investimentos ---
+// --- Vínculo de Investimento ---
 let listaInvestimentosLocal = [];
-window.addEventListener('investimentosAtualizados', (e) => {
-    listaInvestimentosLocal = e.detail;
-});
+window.addEventListener('investimentosAtualizados', (e) => { listaInvestimentosLocal = e.detail; });
 
 function solicitarVinculoInvestimento(categoria, callback) {
     const modal = document.getElementById('modal-vinculo-investimento');
@@ -1488,26 +1706,24 @@ function solicitarVinculoInvestimento(categoria, callback) {
 
     const catLower = categoria.toLowerCase();
     titulo.innerText = catLower.includes('resgate') ? 'Resgatar de qual investimento?' : 'Direcionar para qual investimento?';
-    texto.innerText = catLower.includes('resgate') 
-        ? 'Selecione o investimento de onde este valor está sendo retirado.' 
+    texto.innerText = catLower.includes('resgate')
+        ? 'Selecione o investimento de onde este valor está sendo retirado.'
         : 'Selecione o investimento para onde este valor está sendo enviado.';
 
     const renderizarOpcoes = () => {
         listaUI.innerHTML = listaInvestimentosLocal.map(inv => `
-            <button class="btn-vinculo-item" data-id="${inv.id}" style="width: 100%; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.2s;">
-                <div style="display: flex; flex-direction: column;">
-                    <span style="font-weight: 600;">${inv.nome}</span>
-                    ${inv.rendimento ? `<span style="font-size: 0.7rem; color: var(--accent); margin-top: 2px;">${inv.rendimento}</span>` : ''}
+            <button class="btn-vinculo-item" data-id="${inv.id}" style="width:100%; padding:1rem; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; color:var(--text-main); text-align:left; cursor:pointer; display:flex; justify-content:space-between; align-items:center; transition:0.2s;">
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <span style="font-weight:600;">${inv.nome}</span>
+                    ${inv.rendimento ? `<span style="font-size:0.7rem; color:var(--accent);">${inv.rendimento}</span>` : ''}
                 </div>
-                <span style="font-size: 0.8rem; color: var(--text-muted);">Saldo: R$ ${inv.saldo ? inv.saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '0,00'}</span>
+                <span style="font-size:0.8rem; color:var(--text-muted);">R$ ${inv.saldo ? inv.saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '0,00'}</span>
             </button>
         `).join('');
-        
-        listaUI.innerHTML += `
-            <button id="btn-abrir-novo-rapido" style="width: 100%; padding: 1rem; background: none; border: 1px dashed var(--border); border-radius: 8px; color: var(--accent); cursor: pointer; transition: 0.2s; margin-top: 10px;">
-                <i class="fa-solid fa-plus"></i> Criar Novo Investimento
-            </button>
-        `;
+
+        listaUI.innerHTML += `<button id="btn-abrir-novo-rapido" style="width:100%; padding:1rem; background:none; border:1px dashed var(--border); border-radius:10px; color:var(--accent); cursor:pointer; transition:0.2s; margin-top:8px; font-size:0.9rem;">
+            <i class="fa-solid fa-plus"></i> Criar Novo Investimento
+        </button>`;
     };
 
     renderizarOpcoes();
@@ -1529,39 +1745,26 @@ function solicitarVinculoInvestimento(categoria, callback) {
 
         if (btnItem) {
             const id = btnItem.getAttribute('data-id');
-            fechar();
-            callback(id);
+            fechar(); callback(id);
         } else if (btnAbrirNovo) {
-            secaoNovo.style.display = 'block';
-            inputNovo.focus();
+            secaoNovo.style.display = 'flex'; inputNovo.focus();
         } else if (btnPularLocal) {
-            fechar();
-            callback(null);
+            fechar(); callback(null);
         } else if (btnFecharLocal) {
-            fechar();
-            callback(null);
+            fechar(); callback(null);
         } else if (btnCriarLocal) {
             const nome = inputNovo.value.trim();
             if (!nome) return;
             try {
-                const docRef = await addDoc(collection(window.db, "investimentos"), {
-                    nome: nome,
-                    saldo: 0,
-                    userId: userIdLogado,
-                    createdAt: new Date().toISOString()
-                });
-                fechar();
-                callback(docRef.id);
-            } catch (error) {
-                console.error("Erro ao criar investimento rápido:", error);
-            }
+                const docRef = await addDoc(collection(window.db, "investimentos"), { nome, saldo: 0, userId: userIdLogado, createdAt: new Date().toISOString() });
+                fechar(); callback(docRef.id);
+            } catch (error) { console.error("Erro ao criar investimento rápido:", error); }
         }
     });
 }
 
 // --- Setup ---
-document.getElementById('in-data').value = ultimaDataInserida;
+configurarDataPadrao();
 atualizarCorTipo();
 atualizarInterfaceMes();
 carregarOpcoesFormulario();
-
