@@ -15,7 +15,4 @@
 
 • ARRUMAR ICONES NA DESCRIÇÃO DAS CATEGORIAS FIXAS (AQUELAS QUE FAZEM LIGAÇÃO COM A ABA IVNESTIMENTOS)
 
-[login]
-arrumar tela
-
 • Verificar como estão funcionando (e se estão funcionando devidamente) as simulações

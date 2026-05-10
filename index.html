@@ -9,61 +9,108 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* Estilos da Tela de Login */
+        /* Estilos da Tela de Login Premium */
         #tela-login {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: #f4f7f6;
+            background-color: #050505;
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(184, 134, 11, 0.2), transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(184, 134, 11, 0.1), transparent 40%),
+                radial-gradient(circle at 0% 100%, rgba(184, 134, 11, 0.05), transparent 40%);
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 9999;
             flex-direction: column;
+            overflow: hidden;
         }
 
         .login-box {
-            background: white;
-            padding: 2.5rem;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            background: rgba(18, 18, 20, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 3.5rem 2.5rem;
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 20px rgba(184, 134, 11, 0.1);
             text-align: center;
-            max-width: 400px;
+            max-width: 420px;
             width: 90%;
+            border: 1px solid rgba(184, 134, 11, 0.2);
+            animation: loginEntry 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes loginEntry {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .login-box .login-logo {
+            height: 50px;
+            margin-bottom: 2rem;
+            filter: drop-shadow(0 4px 12px rgba(184, 134, 11, 0.3));
         }
 
         .login-box h2 {
             color: var(--text-main);
-            margin-bottom: 0.5rem;
-            font-size: 2rem;
+            margin-bottom: 0.8rem;
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
         }
 
         .login-box p {
             color: var(--text-muted);
-            margin-bottom: 2rem;
+            margin-bottom: 2.5rem;
+            font-size: 1rem;
+            line-height: 1.5;
         }
 
         .btn-google {
-            background-color: #4285F4;
-            color: white;
+            background: linear-gradient(135deg, #FFD700, #DAA520, #B8860B);
+            color: #000;
             border: none;
-            padding: 12px 20px;
-            border-radius: 8px;
-            font-size: 1rem;
+            padding: 14px 24px;
+            border-radius: 12px;
+            font-size: 1.05rem;
             cursor: pointer;
-            font-weight: bold;
+            font-weight: 700;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 12px;
             width: 100%;
-            transition: background 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 15px rgba(218, 165, 32, 0.3);
         }
 
         .btn-google:hover {
-            background-color: #3367D6;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(218, 165, 32, 0.5);
+            filter: brightness(1.1);
+        }
+
+        .btn-google:active {
+            transform: translateY(0);
+        }
+
+        .btn-google i {
+            font-size: 1.2rem;
+        }
+
+        .login-footer {
+            margin-top: 2rem;
+            font-size: 0.85rem;
+            color: rgba(148, 163, 184, 0.5);
         }
 
         /* Ocultar app principal por padrão */
@@ -78,11 +125,15 @@
     <!-- Tela de Login -->
     <div id="tela-login">
         <div class="login-box">
-            <h2><i class="fa-solid fa-wallet" style="color: var(--accent);"></i> Finanças</h2>
-            <p>Faça login para acessar seu painel seguro.</p>
+            <img src="logo.png" alt="Vallor.nest" class="login-logo">
+            <h2>Bem-vindo de volta</h2>
+            <p>Gerencie suas finanças com inteligência e elegância.</p>
             <button id="btn-login-google" class="btn-google">
                 <i class="fa-brands fa-google"></i> Entrar com Google
             </button>
+            <div class="login-footer">
+                &copy; 2024 Vallor.nest • Gerenciador de Finanças
+            </div>
         </div>
     </div>
 
